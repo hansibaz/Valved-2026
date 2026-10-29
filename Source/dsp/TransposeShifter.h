@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <cstdint>
 #include <cmath>
 #include <algorithm>
 #include "Biquad.h"
@@ -94,19 +95,19 @@ private:
     // Procura o salto J que melhor alinha a forma de onda e inicia o crossfade
     void jump (bool backward)
     {
-        const long ro = (long) std::floor (readPos);
-        const long delay = w - ro;
-        long jLo, jHi;
-        if (! backward) { jHi = delay - corrLen - 1; jLo = std::max<long> (minJump, jHi - search); }
+        const std::int64_t ro = (std::int64_t) std::floor (readPos);
+        const std::int64_t delay = w - ro;
+        std::int64_t jLo, jHi;
+        if (! backward) { jHi = delay - corrLen - 1; jLo = std::max<std::int64_t> (minJump, jHi - search); }
         else            { jLo = minJump; jHi = minJump + search; }
-        if (jHi <= jLo) { jLo = std::max<long> (1, jHi - 1); }
+        if (jHi <= jLo) { jLo = std::max<std::int64_t> (1, jHi - 1); }
 
-        double best = -2.0; long bestJ = jHi;
+        double best = -2.0; std::int64_t bestJ = jHi;
         double ea = 0.0;
         for (int k = 0; k < corrLen; k += 2) { const float a = at (ro + k); ea += (double) a * a; }
-        for (long j = jLo; j <= jHi; ++j)
+        for (std::int64_t j = jLo; j <= jHi; ++j)
         {
-            const long cand = backward ? ro - j : ro + j;
+            const std::int64_t cand = backward ? ro - j : ro + j;
             double ab = 0.0, eb = 0.0;
             for (int k = 0; k < corrLen; k += 2)
             {
@@ -121,14 +122,14 @@ private:
         xfLeft = xfLen;
     }
 
-    inline float at (long i) const noexcept { return buf[(size_t) (i & mask)]; }
+    inline float at (std::int64_t i) const noexcept { return buf[(size_t) (i & mask)]; }
 
     // Interpolação cúbica (Hermite)
     inline float read (double pos) const noexcept
     {
         const double fl = std::floor (pos);
         const float t = (float) (pos - fl);
-        const long i = (long) fl;
+        const std::int64_t i = (std::int64_t) fl;
         const float ym1 = at (i - 1), y0 = at (i), y1 = at (i + 1), y2 = at (i + 2);
         const float c1 = 0.5f * (y1 - ym1);
         const float c2 = ym1 - 2.5f * y0 + 2.0f * y1 - 0.5f * y2;
@@ -136,11 +137,11 @@ private:
         return ((c3 * t + c2) * t + c1) * t + y0;
     }
 
-    static constexpr long size = 1 << 16, mask = size - 1;
-    static constexpr long wrapAt = 1L << 40, wrapShift = 1L << 39;
+    static constexpr std::int64_t size = 1 << 16, mask = size - 1;
+    static constexpr std::int64_t wrapAt = std::int64_t (1) << 40, wrapShift = std::int64_t (1) << 39;
     std::vector<float> buf;
     double fs = 48000, ratio = 1.0, readPos = 0, fromPos = 0;
-    long w = 0;
+    std::int64_t w = 0;
     int semis = 0, corrLen = 480, search = 1250, xfLen = 576, minJump = 192, xfLeft = 0;
     float wet = 0.0f, wetCoef = 0.999f;
 };
