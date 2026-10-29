@@ -26,6 +26,10 @@ namespace ParamID
     inline constexpr const char* chorusDepth = "chorusDepth";
     inline constexpr const char* resonance = "resonance";
     inline constexpr const char* recMode   = "recMode";
+    inline constexpr const char* britMode  = "britMode";
+
+    // Cada amp guarda a própria regulagem: "a0_gain", "a1_gain", ...
+    inline juce::String ampKnob (int model, const char* knob) { return "a" + juce::String (model) + "_" + knob; }
     inline constexpr const char* cabOn     = "cabOn";
     inline constexpr const char* cab       = "cab";
     inline constexpr const char* micX      = "micX";
@@ -138,7 +142,8 @@ private:
     std::atomic<float>* pCab; std::atomic<float>* pMicX; std::atomic<float>* pMicDist;
     std::atomic<float>* pOutput;
     std::atomic<float>* pChorusRate; std::atomic<float>* pChorusDepth;
-    std::atomic<float>* pResonance; std::atomic<float>* pRecMode;
+    std::atomic<float>* pResonance; std::atomic<float>* pRecMode; std::atomic<float>* pBritMode;
+    std::atomic<float>* pAmpKnob[4][7] {};   // [amp][gain, bass, mid, treble, presence, master, resonance]
     std::atomic<float>* pPedal[4][4];   // [pedal][on, drive, tone, level]
     std::atomic<float>* pDly[10];
     std::atomic<float>* pRev[8];

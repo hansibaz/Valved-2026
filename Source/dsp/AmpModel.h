@@ -2,6 +2,7 @@
 #include <juce_dsp/juce_dsp.h>
 #include <array>
 #include "Biquad.h"
+#include "TubeAmp.h"
 
 namespace vlv
 {
@@ -57,6 +58,16 @@ public:
         oversampling->initProcessing ((size_t) juce::jmax (1, maxBlock));
         osFs = fs * 4.0;
         for (auto& d : dc) d.prepare (osFs, 12.0);
+        // Circuitos valvulados (um por amp/modo, prontos para troca instantânea)
+        const tube::CircuitSpec specs[NumCircuits] = { tube::brit80s(), tube::britModern(), tube::block5150(),
+                                                       tube::recRectifier (false), tube::recRectifier (true) };
+        for (int i = 0; i < NumCircuits; ++i)
+        {
+            auto sp = specs[i];
+            sp.outTrimDb = circuitTrimDb[i];
+            circuits[i].prepare (osFs, fs);
+            circuits[i].configure (sp);
+        }
         dirty = true;
         reset();
     }
@@ -67,6 +78,7 @@ public:
         for (auto& f : lpf) f.reset();
         for (auto& d : dc) d.reset();
         bass.reset(); mid.reset(); treble.reset(); presence.reset(); reso.reset();
+        for (auto& c : circuits) c.reset();
         if (oversampling) oversampling->reset();
     }
 
@@ -74,11 +86,12 @@ public:
     {
         int model = 1;
         float gain = 5, bass = 5, mid = 5, treble = 5, presence = 5, master = 5, resonance = 5;
-        bool recModern = true;
+        bool recModern = true, britModern = false;
         bool operator!= (const Settings& o) const
         {
             return model != o.model || gain != o.gain || bass != o.bass || mid != o.mid || treble != o.treble // NOLINT
-                || presence != o.presence || master != o.master || resonance != o.resonance || recModern != o.recModern;
+                || presence != o.presence || master != o.master || resonance != o.resonance || recModern != o.recModern
+                || britModern != o.britModern;
         }
     };
 
@@ -86,7 +99,8 @@ public:
     {
         Settings n = s;
         n.model = juce::jlimit (0, 3, n.model);
-        const bool voicingChange = n.model != set.model || (n.model == 3 && n.recModern != set.recModern);
+        const bool voicingChange = n.model != set.model || (n.model == 3 && n.recModern != set.recModern)
+                                || (n.model == 1 && n.britModern != set.britModern);
         if (n != set) { set = n; dirty = true; }
         if (voicingChange) reset();
     }
@@ -100,6 +114,14 @@ public:
         auto up = oversampling->processSamplesUp (block);
         float* u = up.getChannelPointer (0);
         const int nUp = (int) up.getNumSamples();
+
+        // Amps valvulados: circuito completo no domínio sobreamostrado
+        if (set.model != 0)
+        {
+            circuits[currentCircuit()].processOS (u, nUp);
+            oversampling->processSamplesDown (block);
+            return;
+        }
         const auto& v = cur;
         const float h = v.headroom, inv = 1.0f / h;
 
@@ -133,9 +155,31 @@ public:
     }
 
 private:
+public:
+    enum { CircBrit80 = 0, CircBritModern, CircBlock, CircRecVintage, CircRecModern, NumCircuits };
+    // Nivelamento de volume de cada circuito (medido com todos os knobs no meio)
+    static constexpr float circuitTrimDb[NumCircuits] = { -14.2f, -13.5f, -12.5f, -13.35f, -15.6f };
+    static float cleanTrimDb() { return -4.6f; }
+
+private:
+    int currentCircuit() const
+    {
+        switch (set.model)
+        {
+            case 1:  return set.britModern ? CircBritModern : CircBrit80;
+            case 2:  return CircBlock;
+            default: return set.recModern ? CircRecModern : CircRecVintage;
+        }
+    }
+
     void updateCoefficients()
     {
         dirty = false;
+        if (set.model != 0)
+        {
+            circuits[currentCircuit()].setKnobs (set.gain, set.bass, set.mid, set.treble, set.presence, set.master, set.resonance);
+            return;
+        }
         cur = getVoicings()[(size_t) set.model];
         auto& v = cur;
 
@@ -179,7 +223,7 @@ private:
             reso.setRaw (1, 0, 0, 1, 0, 0);
 
         masterGain = dbToGain (-14.0f + 24.0f * (set.master / 10.0f));
-        outTrim = dbToGain (v.outTrimDb);
+        outTrim = dbToGain (v.outTrimDb + cleanTrimDb());
     }
 
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
@@ -190,6 +234,7 @@ private:
     float stageGain = 1, tanhBias = 0, masterGain = 1, outTrim = 1;
 
     Biquad inHpf, preMid, bass, mid, treble, presence, reso;
+    tube::CircuitAmp circuits[NumCircuits];
     std::array<Biquad, 4> lpf;
     std::array<DCBlocker, 4> dc;
 };

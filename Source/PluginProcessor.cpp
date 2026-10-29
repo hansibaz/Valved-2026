@@ -36,15 +36,24 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
     for (auto& v : vlv::getVoicings()) ampNames.add (v.name);
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::amp, 1 }, "Amp", ampNames, 1));
 
-    p.push_back (knob (ParamID::gain, "Gain", 5.0f));
-    p.push_back (knob (ParamID::bass, "Bass", 5.0f));
-    p.push_back (knob (ParamID::mid, "Mid", 5.0f));
-    p.push_back (knob (ParamID::treble, "Treble", 5.0f));
-    p.push_back (knob (ParamID::presence, "Presence", 5.0f));
-    p.push_back (knob (ParamID::master, "Master", 5.0f));
-    p.push_back (knob (ParamID::resonance, "Resonance", 5.0f));
+    // Regulagem própria de cada amp (todos começam com os knobs no meio)
+    for (int m = 0; m < 4; ++m)
+    {
+        const String amp (vlv::getVoicings()[(size_t) m].name);
+        static const char* knobs[] = { ParamID::gain, ParamID::bass, ParamID::mid, ParamID::treble, ParamID::presence, ParamID::master, ParamID::resonance };
+        static const char* names[] = { "Gain", "Bass", "Mid", "Treble", "Presence", "Master", "Resonance" };
+        for (int k = 0; k < 7; ++k)
+        {
+            if (k == 6 && (m == 0 || m == 3)) continue;   // Resonance só no Brit 410 e no 51 Block
+            p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamID::ampKnob (m, knobs[k]), 1 }, amp + " " + names[k],
+                NormalisableRange<float> (0.0f, 10.0f, 0.01f), 5.0f,
+                AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (v, 1); })));
+        }
+    }
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::recMode, 1 }, "Rec Mode",
         StringArray { "Vintage", "Modern" }, 1));
+    p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::britMode, 1 }, "Brit 410 Mode",
+        StringArray { "80's", "Modern" }, 0));
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::chorus, 1 }, "Chorus", false));
     p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamID::chorusRate, 1 }, "Chorus Rate",
         NormalisableRange<float> (0.1f, 6.0f, 0.01f, 0.5f), 0.8f,
@@ -122,12 +131,12 @@ ValvedProcessor::ValvedProcessor()
     pGate      = apvts.getRawParameterValue (ParamID::gate);
     pTranspose = apvts.getRawParameterValue (ParamID::transpose);
     pAmp       = apvts.getRawParameterValue (ParamID::amp);
-    pGain      = apvts.getRawParameterValue (ParamID::gain);
-    pBass      = apvts.getRawParameterValue (ParamID::bass);
-    pMid       = apvts.getRawParameterValue (ParamID::mid);
-    pTreble    = apvts.getRawParameterValue (ParamID::treble);
-    pPresence  = apvts.getRawParameterValue (ParamID::presence);
-    pMaster    = apvts.getRawParameterValue (ParamID::master);
+    for (int m = 0; m < 4; ++m)
+    {
+        const char* knobs[] = { ParamID::gain, ParamID::bass, ParamID::mid, ParamID::treble, ParamID::presence, ParamID::master, ParamID::resonance };
+        for (int k = 0; k < 7; ++k)
+            pAmpKnob[m][k] = apvts.getRawParameterValue (ParamID::ampKnob (m, knobs[k]));   // nullptr se o amp não tem o knob
+    }
     pChorus    = apvts.getRawParameterValue (ParamID::chorus);
     pCabOn     = apvts.getRawParameterValue (ParamID::cabOn);
     pCab       = apvts.getRawParameterValue (ParamID::cab);
@@ -136,8 +145,8 @@ ValvedProcessor::ValvedProcessor()
     pOutput    = apvts.getRawParameterValue (ParamID::output);
     pChorusRate  = apvts.getRawParameterValue (ParamID::chorusRate);
     pChorusDepth = apvts.getRawParameterValue (ParamID::chorusDepth);
-    pResonance   = apvts.getRawParameterValue (ParamID::resonance);
     pRecMode     = apvts.getRawParameterValue (ParamID::recMode);
+    pBritMode    = apvts.getRawParameterValue (ParamID::britMode);
 
     for (int i = 0; i < 4; ++i)
     {
@@ -298,10 +307,12 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     }
 
     vlv::AmpModel::Settings st;
-    st.model = (int) pAmp->load();
-    st.gain = pGain->load(); st.bass = pBass->load(); st.mid = pMid->load(); st.treble = pTreble->load();
-    st.presence = pPresence->load(); st.master = pMaster->load(); st.resonance = pResonance->load();
+    st.model = juce::jlimit (0, 3, (int) pAmp->load());
+    auto knobVal = [this, &st] (int k) { auto* p = pAmpKnob[st.model][k]; return p != nullptr ? p->load() : 5.0f; };
+    st.gain = knobVal (0); st.bass = knobVal (1); st.mid = knobVal (2); st.treble = knobVal (3);
+    st.presence = knobVal (4); st.master = knobVal (5); st.resonance = knobVal (6);
     st.recModern = pRecMode->load() > 0.5f;
+    st.britModern = pBritMode->load() > 0.5f;
     amp.setParameters (st);
     chorus.setRate (pChorusRate->load());
     chorus.setDepth (pChorusDepth->load() / 10.0f);

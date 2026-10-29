@@ -16,7 +16,7 @@ namespace
         { { ParamID::gain, "GAIN", false, 0 },     { ParamID::bass, "BASS", false, 0 },
           { ParamID::mid, "MIDDLE", false, 0 },    { ParamID::treble, "TREBLE", false, 0 },
           { ParamID::presence, "PRESENCE", false, 1 }, { ParamID::resonance, "RESONANCE", false, 1 },
-          { ParamID::master, "MASTER", false, 2 } },
+          { ParamID::master, "MASTER", false, 2 }, { ParamID::britMode, "80'S / MODERN", true, 3 } },
         { { ParamID::gain, "PRE GAIN", false, 0 }, { ParamID::bass, "LOW", false, 0 },
           { ParamID::mid, "MID", false, 0 },       { ParamID::treble, "HIGH", false, 0 },
           { ParamID::master, "POST GAIN", false, 1 }, { ParamID::resonance, "RESONANCE", false, 1 },
@@ -29,13 +29,13 @@ namespace
 
     const std::vector<const char*> sectionTitles[4] = {
         { "PREAMP", "OUTPUT", "CHORUS" },
-        { "PREAMP", "POWER AMP", "MASTER" },
+        { "PREAMP", "POWER AMP", "MASTER", "MODE" },
         { "PREAMP", "POWER AMP" },
         { "PREAMP", "MASTER", "MODE" },
     };
 
     // Faixa horizontal (fração da largura do painel) onde ficam os controles
-    const float rangeOf[4][2] = { { 0.065f, 0.700f }, { 0.215f, 0.875f }, { 0.155f, 0.795f }, { 0.135f, 0.800f } };
+    const float rangeOf[4][2] = { { 0.065f, 0.700f }, { 0.205f, 0.885f }, { 0.155f, 0.795f }, { 0.135f, 0.800f } };
 
     const int knobStyleOf[4] = { KnobBlackPointer, KnobBrass, KnobBlackPointer, KnobBlackChrome };
 
@@ -193,34 +193,43 @@ namespace
     }
 }
 
+// Knobs com regulagem própria em cada amp têm o id "aN_knob"
+juce::String AmpHead::fullId (int m, const char* base)
+{
+    for (auto* k : { ParamID::gain, ParamID::bass, ParamID::mid, ParamID::treble, ParamID::presence, ParamID::master, ParamID::resonance })
+        if (juce::String (base) == k) return ParamID::ampKnob (m, base);
+    return base;
+}
+
 //==============================================================================
 AmpHead::AmpHead (juce::AudioProcessorValueTreeState& s) : state (s)
 {
-    for (auto& list : controlsOf)
-        for (auto& c : list)
+    for (int m = 0; m < 4; ++m)
+        for (auto c : controlsOf[m])
         {
+            const juce::String id = fullId (m, c.paramId);
             if (c.isSwitch)
             {
-                if (switchIds.contains (c.paramId)) continue;
-                const bool rec = juce::String (c.paramId) == ParamID::recMode;
+                if (switchIds.contains (id)) continue;
+                const bool rec = id == ParamID::recMode || id == ParamID::britMode;
                 auto* sw = switches.add (new ToggleSwitch (rec ? juce::Colour (0xffff4a2a) : juce::Colour (0xff36d1ff)));
-                switchIds.add (c.paramId);
+                switchIds.add (id);
                 addChildComponent (sw);
-                switchAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (s, c.paramId, *sw));
+                switchAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (s, id, *sw));
             }
             else
             {
-                if (sliderIds.contains (c.paramId)) continue;
+                if (sliderIds.contains (id)) continue;
                 auto* k = sliders.add (new juce::Slider());
                 k->setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
                 k->setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
                 k->setRotaryParameters (knobStart, knobEnd, true);
                 k->setPopupDisplayEnabled (true, true, this);
                 k->setMouseDragSensitivity (220);
-                sliderIds.add (c.paramId);
+                sliderIds.add (id);
                 addChildComponent (k);
-                sliderAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (s, c.paramId, *k));
-                if (auto* prm = s.getParameter (c.paramId))
+                sliderAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (s, id, *k));
+                if (auto* prm = s.getParameter (id))
                     k->setDoubleClickReturnValue (true, prm->convertFrom0to1 (prm->getDefaultValue()));
             }
         }
@@ -253,8 +262,8 @@ void AmpHead::setModel (int m)
     for (auto* sw : switches) sw->setVisible (false);
     for (auto& c : controls())
     {
-        if (c.isSwitch) { if (auto* sw = findSwitch (c.paramId)) sw->setVisible (true); }
-        else if (auto* k = findSlider (c.paramId)) k->setVisible (true);
+        if (c.isSwitch) { if (auto* sw = findSwitch (fullId (model, c.paramId))) sw->setVisible (true); }
+        else if (auto* k = findSlider (fullId (model, c.paramId))) k->setVisible (true);
     }
     layoutControls();
     refreshState();
@@ -328,13 +337,13 @@ void AmpHead::layoutControls()
         const auto c = geo.pos[i];
         if (list[i].isSwitch)
         {
-            if (auto* sw = findSwitch (list[i].paramId))
+            if (auto* sw = findSwitch (fullId (model, list[i].paramId)))
             {
                 const float s = geo.knobD * 0.95f;
                 sw->setBounds (juce::Rectangle<float> (s, s * 1.3f).withCentre (c.translated (0, -s * 0.05f)).toNearestInt());
             }
         }
-        else if (auto* k = findSlider (list[i].paramId))
+        else if (auto* k = findSlider (fullId (model, list[i].paramId)))
             k->setBounds (juce::Rectangle<float> (geo.knobD, geo.knobD).withCentre (c).toNearestInt());
     }
 }

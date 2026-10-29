@@ -61,6 +61,7 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> switchAtt;
 
     juce::Slider* findSlider (const juce::String& id);
+    static juce::String fullId (int model, const char* base);
     ToggleSwitch* findSwitch (const juce::String& id);
 
     juce::Image cache;
