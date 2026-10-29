@@ -3,6 +3,7 @@
 #include <juce_dsp/juce_dsp.h>
 #include "dsp/NoiseGate.h"
 #include "dsp/PitchShifter.h"
+#include "dsp/TransposeShifter.h"
 #include "dsp/AmpModel.h"
 #include "dsp/CabSim.h"
 #include "dsp/Overdrive.h"
@@ -42,6 +43,13 @@ namespace ParamID
         static const char* names[] = { "green", "yellow", "gold", "blue" };
         return juce::String (names[juce::jlimit (0, 3, index)]) + suffix;
     }
+
+    inline constexpr const char* greenMode   = "greenMode";    // TS808 / TS9
+    inline constexpr const char* compOn      = "compOn";
+    inline constexpr const char* compSustain = "compSustain";
+    inline constexpr const char* compLevel   = "compLevel";
+    inline constexpr const char* compAttack  = "compAttack";
+    inline constexpr const char* compClip    = "compClip";
 
     inline constexpr const char* dlyOn      = "dlyOn";
     inline constexpr const char* dlyType    = "dlyType";
@@ -121,12 +129,14 @@ private:
     void refreshCab (bool force);
 
     vlv::NoiseGate gate;
-    vlv::PitchShifter shifter;
+    vlv::TransposeShifter shifter;
+    std::vector<float> gateGains, gateDelay; int gateDelayW = 0;
     vlv::AmpModel amp;
-    vlv::StereoChorus chorus;
+    vlv::CE1Chorus chorus;
     vlv::CabSim cab;
     vlv::Overdrive pedals[4] { vlv::Overdrive (vlv::PedalGreen), vlv::Overdrive (vlv::PedalYellow),
                                vlv::Overdrive (vlv::PedalGold), vlv::Overdrive (vlv::PedalBlue) };
+    vlv::pedal::OTACompressor compressor;
     vlv::StereoDelay delay;
     vlv::AmbientReverb reverb;
     std::atomic<double> bpm { 120.0 };
@@ -146,6 +156,8 @@ private:
     std::atomic<float>* pAmpKnob[4][7] {};   // [amp][gain, bass, mid, treble, presence, master, resonance]
     std::atomic<float>* pPedal[4][4];   // [pedal][on, drive, tone, level]
     std::atomic<float>* pDly[10];
+    std::atomic<float>* pComp[5];   // on, sustain, level, attack, clip
+    std::atomic<float>* pGreenMode;
     std::atomic<float>* pRev[8];
 
     // Estado do gabinete (lido no timer, na thread da interface)

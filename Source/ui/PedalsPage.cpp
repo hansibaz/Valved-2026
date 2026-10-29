@@ -10,25 +10,45 @@ namespace
     {
         juce::Colour top, bottom, ink;
         int knobStyle;
-        KnobSpot spots[3];          // drive, tone, level
-        const char* labels[3];
+        int numKnobs;
+        KnobSpot spots[4];
+        const char* labels[4];
         const char* subtitle;
     };
 
-    const PedalLook looks[4] = {
-        { juce::Colour (0xff4aa35c), juce::Colour (0xff1d5c2c), juce::Colour (0xfff3ecd6), KnobBlackPointer,
+    // 0..3 = drives (Green, Yellow, Gold, Blue), 4 = compressor (Silver Comp)
+    const PedalLook looks[5] = {
+        { juce::Colour (0xff4aa35c), juce::Colour (0xff1d5c2c), juce::Colour (0xfff3ecd6), KnobBlackPointer, 3,
           { { 0.27f, 0.18f, 0.28f }, { 0.50f, 0.30f, 0.18f }, { 0.73f, 0.18f, 0.28f } },
           { "DRIVE", "TONE", "LEVEL" }, "OVERDRIVE" },
-        { juce::Colour (0xfff5cd2a), juce::Colour (0xffc99706), juce::Colour (0xff151208), KnobBlackPointer,
+        { juce::Colour (0xfff5cd2a), juce::Colour (0xffc99706), juce::Colour (0xff151208), KnobBlackPointer, 3,
           { { 0.78f, 0.21f, 0.23f }, { 0.50f, 0.21f, 0.23f }, { 0.22f, 0.21f, 0.23f } },
           { "DRIVE", "TONE", "LEVEL" }, "ASYMMETRIC OVERDRIVE" },
-        { juce::Colour (0xffe6c473), juce::Colour (0xff97762c), juce::Colour (0xff2b1f0c), KnobCream,
+        { juce::Colour (0xffe6c473), juce::Colour (0xff97762c), juce::Colour (0xff2b1f0c), KnobCream, 3,
           { { 0.22f, 0.21f, 0.23f }, { 0.50f, 0.21f, 0.23f }, { 0.78f, 0.21f, 0.23f } },
           { "GAIN", "TREBLE", "OUTPUT" }, "TRANSPARENT OVERDRIVE" },
-        { juce::Colour (0xff3a6fd8), juce::Colour (0xff15367f), juce::Colours::white, KnobChrome,
+        { juce::Colour (0xff3a6fd8), juce::Colour (0xff15367f), juce::Colours::white, KnobChrome, 3,
           { { 0.50f, 0.21f, 0.23f }, { 0.78f, 0.21f, 0.23f }, { 0.22f, 0.21f, 0.23f } },
           { "DRIVE", "TONE", "VOLUME" }, "AMP-IN-A-BOX" },
+        { juce::Colour (0xffe9ebee), juce::Colour (0xff8d9198), juce::Colour (0xff15171a), KnobBlackPointer, 4,
+          { { 0.27f, 0.17f, 0.26f }, { 0.73f, 0.17f, 0.26f }, { 0.27f, 0.355f, 0.16f }, { 0.73f, 0.355f, 0.16f } },
+          { "SUSTAIN", "LEVEL", "ATTACK", "CLIP" }, "OTA COMPRESSOR" },
     };
+
+    bool isComp (int look) { return look == 4; }
+
+    juce::String knobParam (int look, int k)
+    {
+        if (isComp (look))
+        {
+            static const char* ids[4] = { ParamID::compSustain, ParamID::compLevel, ParamID::compAttack, ParamID::compClip };
+            return ids[k];
+        }
+        static const char* suffix[3] = { "Drive", "Tone", "Level" };
+        return ParamID::pedal (look, suffix[k]);
+    }
+
+    juce::String onParam (int look) { return isComp (look) ? juce::String (ParamID::compOn) : ParamID::pedal (look, "On"); }
 
     constexpr float knobStart = juce::MathConstants<float>::pi * (7.0f / 6.0f);
     constexpr float knobEnd   = juce::MathConstants<float>::pi * (17.0f / 6.0f);
@@ -93,10 +113,36 @@ void FootSwitch::paintButton (juce::Graphics& g, bool highlighted, bool down)
 }
 
 //==============================================================================
+void MiniToggle::paintButton (juce::Graphics& g, bool highlighted, bool)
+{
+    auto r = getLocalBounds().toFloat();
+    const bool on = getToggleState();
+    auto slot = juce::Rectangle<float> (r.getWidth() * 0.34f, r.getHeight() * 0.62f).withCentre (r.getCentre());
+    // Rótulos dos dois lados
+    g.setFont (Fonts::condensedBold (juce::jmax (12.0f, r.getHeight() * 0.55f)));
+    g.setColour (ink.withAlpha (on ? 0.5f : 1.0f));
+    g.drawText (leftText,  r.withRight (slot.getX() - 3.0f), juce::Justification::centredRight);
+    g.setColour (ink.withAlpha (on ? 1.0f : 0.5f));
+    g.drawText (rightText, r.withLeft (slot.getRight() + 3.0f), juce::Justification::centredLeft);
+
+    // Trilho da chave deslizante
+    g.setColour (juce::Colour (0xff0b0b0c));
+    g.fillRoundedRectangle (slot, slot.getHeight() * 0.5f);
+    g.setColour (juce::Colours::white.withAlpha (0.25f));
+    g.drawRoundedRectangle (slot.translated (0, 0.8f), slot.getHeight() * 0.5f, 0.8f);
+    const float d = slot.getHeight() - 3.0f;
+    auto knob = juce::Rectangle<float> (d, d).withCentre ({ on ? slot.getRight() - d * 0.5f - 1.5f : slot.getX() + d * 0.5f + 1.5f, slot.getCentreY() });
+    juce::ColourGradient kg (juce::Colour (0xfff6f6f6), knob.getX(), knob.getY(), juce::Colour (0xff60636a), knob.getX(), knob.getBottom(), false);
+    g.setGradientFill (kg);
+    g.fillEllipse (knob);
+    if (highlighted) { g.setColour (juce::Colours::white.withAlpha (0.15f)); g.fillEllipse (knob); }
+}
+
+//==============================================================================
 Stompbox::Stompbox (juce::AudioProcessorValueTreeState& s, int pedalIndex) : state (s), index (pedalIndex)
 {
-    static const char* suffix[3] = { "Drive", "Tone", "Level" };
-    for (int k = 0; k < 3; ++k)
+    numKnobs = looks[index].numKnobs;
+    for (int k = 0; k < numKnobs; ++k)
     {
         auto& kn = knobs[k];
         kn.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
@@ -106,13 +152,21 @@ Stompbox::Stompbox (juce::AudioProcessorValueTreeState& s, int pedalIndex) : sta
         kn.setMouseDragSensitivity (200);
         kn.getProperties().set ("knobStyle", looks[index].knobStyle);
         addAndMakeVisible (kn);
-        const auto id = ParamID::pedal (index, suffix[k]);
+        const auto id = knobParam (index, k);
         knobAtt[k] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (s, id, kn);
         if (auto* prm = s.getParameter (id))
             kn.setDoubleClickReturnValue (true, prm->convertFrom0to1 (prm->getDefaultValue()));
     }
     addAndMakeVisible (footswitch);
-    switchAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (s, ParamID::pedal (index, "On"), footswitch);
+    switchAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (s, onParam (index), footswitch);
+
+    if (index == 0)   // Green: chave TS808 / TS9
+    {
+        modeSwitch = std::make_unique<MiniToggle> ("808", "TS9", looks[0].ink);
+        modeSwitch->setTooltip ("TS808 or TS9 circuit (output stage / op-amp)");
+        addAndMakeVisible (*modeSwitch);
+        modeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (s, ParamID::greenMode, *modeSwitch);
+    }
 }
 
 juce::Rectangle<float> Stompbox::knobRect (int k) const
@@ -125,8 +179,10 @@ juce::Rectangle<float> Stompbox::knobRect (int k) const
 
 void Stompbox::resized()
 {
-    for (int k = 0; k < 3; ++k) knobs[k].setBounds (knobRect (k).toNearestInt());
+    for (int k = 0; k < numKnobs; ++k) knobs[k].setBounds (knobRect (k).toNearestInt());
     const float W = (float) getWidth(), H = (float) getHeight();
+    if (modeSwitch != nullptr)
+        modeSwitch->setBounds (juce::Rectangle<float> (W * 0.8f, 24.0f).withCentre ({ W * 0.5f, H * 0.685f }).toNearestInt());
     const float fsz = W * 0.32f;
     footswitch.setBounds (juce::Rectangle<float> (fsz, fsz).withCentre ({ W * 0.5f, H * 0.82f }).toNearestInt());
     body = {};
@@ -158,12 +214,12 @@ void Stompbox::renderBody()
         juce::Graphics::ScopedSaveState ss (g);
         g.reduceClipRegion (shape);
         juce::Random rng (100 + index);
-        if (index == 2)
+        if (index == 2 || isComp (index))
         {
-            // dourado escovado
+            // metal escovado (dourado / alumínio)
             for (float y = r.getY(); y < r.getBottom(); y += 0.75f)
             {
-                g.setColour ((rng.nextBool() ? juce::Colours::white : juce::Colour (0xff3b2a0e)).withAlpha (0.12f * rng.nextFloat()));
+                g.setColour ((rng.nextBool() ? juce::Colours::white : (isComp (index) ? juce::Colour (0xff202328) : juce::Colour (0xff3b2a0e))).withAlpha (0.12f * rng.nextFloat()));
                 g.fillRect (r.getX(), y, W, 0.5f);
             }
         }
@@ -194,7 +250,7 @@ void Stompbox::renderBody()
     // Escalas dos knobs
     const float ox = r.getX() - 4.0f, oy = r.getY() - 6.0f;
     juce::ignoreUnused (ox, oy);
-    for (int k = 0; k < 3; ++k)
+    for (int k = 0; k < numKnobs; ++k)
     {
         const auto kr = knobRect (k);
         const auto c = kr.getCentre();
@@ -208,7 +264,7 @@ void Stompbox::renderBody()
         }
         g.setColour (lk.ink);
         g.setFont (Fonts::condensedBold (juce::jmax (11.0f, W * 0.058f)));
-        g.drawText (lk.labels[k], juce::Rectangle<float> (90.0f, 16.0f).withCentre ({ c.x, kr.getBottom() + kR * 0.38f + 4.0f }), juce::Justification::centred);
+        g.drawText (lk.labels[k], juce::Rectangle<float> (90.0f, 16.0f).withCentre ({ c.x, kr.getBottom() + juce::jmax (kR * 0.38f, 5.0f) + 4.0f }), juce::Justification::centred);
     }
 
     // Placa do nome
@@ -263,6 +319,25 @@ void Stompbox::renderBody()
             g.fillRect (r.getX() + W * 0.2f, area.getBottom() + 2.0f, W * 0.6f, 1.0f);
             g.setFont (Fonts::condensed (juce::jmax (9.0f, H * 0.032f)));
             g.drawText (lk.subtitle, juce::Rectangle<float> (r.getX(), area.getBottom() + 5.0f, W, H * 0.05f), juce::Justification::centred);
+            break;
+        }
+        case 4:
+        {
+            // Placa preta com letras prateadas (estilo compressor de estúdio)
+            auto plate = juce::Rectangle<float> (r.getX() + W * 0.1f, nameY - H * 0.02f, W * 0.8f, H * 0.14f);
+            g.setColour (juce::Colour (0xff141518));
+            g.fillRoundedRectangle (plate, 3.0f);
+            g.setColour (juce::Colours::white.withAlpha (0.3f));
+            g.drawRoundedRectangle (plate.reduced (2.0f), 2.0f, 0.8f);
+            g.setColour (juce::Colour (0xffdfe2e6));
+            g.setFont (Fonts::wide (plate.getHeight() * 0.3f));
+            g.drawFittedText ("SILVER", plate.withTrimmedBottom (plate.getHeight() * 0.42f).withTrimmedTop (plate.getHeight() * 0.08f).toNearestInt(), juce::Justification::centred, 1);
+            g.setColour (juce::Colour (0xffe0453a));
+            g.setFont (Fonts::condensedBold (plate.getHeight() * 0.26f));
+            g.drawText ("C O M P", plate.withTrimmedTop (plate.getHeight() * 0.56f).withTrimmedBottom (plate.getHeight() * 0.08f), juce::Justification::centred);
+            g.setColour (lk.ink.withAlpha (0.7f));
+            g.setFont (Fonts::condensed (juce::jmax (9.0f, H * 0.032f)));
+            g.drawText (lk.subtitle, juce::Rectangle<float> (r.getX(), plate.getBottom() + 3.0f, W, H * 0.05f), juce::Justification::centred);
             break;
         }
         case 3:
@@ -323,15 +398,16 @@ void Stompbox::paint (juce::Graphics& g)
 
 void Stompbox::refresh()
 {
-    const bool on = state.getRawParameterValue (ParamID::pedal (index, "On"))->load() > 0.5f;
+    const bool on = state.getRawParameterValue (onParam (index))->load() > 0.5f;
     if (on != ledOn) { ledOn = on; repaint(); }
 }
 
 //==============================================================================
 PedalsPage::PedalsPage (ValvedProcessor& p)
 {
-    for (int i = 0; i < 4; ++i)
-        addAndMakeVisible (pedals.add (new Stompbox (p.apvts, i)));
+    // Ordem do sinal: compressor primeiro, depois os drives
+    for (int look : { 4, 0, 1, 2, 3 })
+        addAndMakeVisible (pedals.add (new Stompbox (p.apvts, look)));
 }
 
 void PedalsPage::refresh()
@@ -343,8 +419,11 @@ void PedalsPage::resized()
 {
     auto r = getLocalBounds().toFloat();
     board = r.reduced (34.0f, 0.0f).withTrimmedTop (64.0f).withTrimmedBottom (16.0f);
-    const float pw = 214.0f, ph = juce::jmin (372.0f, board.getHeight() - 62.0f), gap = 34.0f;
-    const float total = pw * 4 + gap * 3;
+    const int n = pedals.size();
+    const float gap = 22.0f;
+    const float pw = juce::jmin (184.0f, (board.getWidth() - 40.0f - gap * (float) (n - 1)) / (float) n);
+    const float ph = juce::jmin (372.0f, board.getHeight() - 62.0f);
+    const float total = pw * (float) n + gap * (float) (n - 1);
     float x = board.getCentreX() - total * 0.5f;
     const float y = board.getY() + 44.0f;
     for (auto* pd : pedals)
@@ -359,7 +438,7 @@ void PedalsPage::paint (juce::Graphics& g)
     // Texto de orientação
     g.setColour (textDim);
     g.setFont (Fonts::condensed (16.0f));
-    g.drawText ("GUITAR  >  GREEN  >  YELLOW  >  GOLD  >  BLUE  >  AMP", getLocalBounds().removeFromTop (30).translated (0, 8), juce::Justification::centred);
+    g.drawText ("GUITAR  >  COMP  >  GREEN  >  YELLOW  >  GOLD  >  BLUE  >  AMP", getLocalBounds().removeFromTop (30).translated (0, 8), juce::Justification::centred);
     g.setColour (textDim.withAlpha (0.7f));
     g.setFont (Fonts::condensed (14.0f));
     g.drawText ("Tip: low drive + high level = clean boost that tightens and pushes the amp",

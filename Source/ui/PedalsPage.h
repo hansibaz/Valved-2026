@@ -13,7 +13,19 @@ public:
     void paintButton (juce::Graphics&, bool highlighted, bool down) override;
 };
 
-// Um pedal de overdrive desenhado
+// Mini chave deslizante de dois lados (ex.: 808 / TS9)
+class MiniToggle : public juce::ToggleButton
+{
+public:
+    MiniToggle (juce::String left, juce::String right, juce::Colour inkColour)
+        : leftText (std::move (left)), rightText (std::move (right)), ink (inkColour) {}
+    void paintButton (juce::Graphics&, bool highlighted, bool down) override;
+private:
+    juce::String leftText, rightText;
+    juce::Colour ink;
+};
+
+// Um pedal desenhado (overdrive ou compressor)
 class Stompbox : public juce::Component
 {
 public:
@@ -30,9 +42,12 @@ private:
     juce::Rectangle<float> knobRect (int k) const;
 
     juce::AudioProcessorValueTreeState& state;
-    int index;
-    juce::Slider knobs[3];   // drive, tone, level
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> knobAtt[3];
+    int index;               // 0..3 = drives, 4 = compressor
+    int numKnobs = 3;
+    juce::Slider knobs[4];
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> knobAtt[4];
+    std::unique_ptr<MiniToggle> modeSwitch;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> modeAtt;
     FootSwitch footswitch;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> switchAtt;
     juce::Image body;

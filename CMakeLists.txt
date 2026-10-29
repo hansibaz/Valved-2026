@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Valved VERSION 0.6.0)
+project(Valved VERSION 0.8.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -64,7 +64,7 @@ target_sources(Valved PRIVATE
     Source/ui/PedalsPage.cpp
     Source/ui/FxPage.cpp)
 
-target_include_directories(Valved PRIVATE Source)
+target_include_directories(Valved PRIVATE Source ThirdParty)
 
 target_compile_definitions(Valved PUBLIC
     JUCE_WEB_BROWSER=0
@@ -98,7 +98,7 @@ if(VLV_BUILD_TESTS)
     Source/ui/CabPage.cpp
     Source/ui/PedalsPage.cpp
     Source/ui/FxPage.cpp)
-    target_include_directories(ValvedTest PRIVATE Source)
+    target_include_directories(ValvedTest PRIVATE Source ThirdParty)
     target_compile_definitions(ValvedTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
         JUCE_ALSA=0 JUCE_JACK=0 JUCE_USE_XRANDR=0 JUCE_USE_XINERAMA=0 JUCE_USE_XCURSOR=0 JUCE_USE_XSHM=0)
     target_link_libraries(ValvedTest PRIVATE ValvedAssets juce::juce_audio_utils juce::juce_dsp

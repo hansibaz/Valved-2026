@@ -3,6 +3,7 @@
 #include <array>
 #include "Biquad.h"
 #include "TubeAmp.h"
+#include "Overdrive.h"
 
 namespace vlv
 {
@@ -239,40 +240,72 @@ private:
     std::array<DCBlocker, 4> dc;
 };
 
-// Chorus estéreo estilo amp de transistor: lado esquerdo seco, lado direito modulado.
-class StereoChorus
+// Chorus Ensemble no estilo Boss CE-1 (o mesmo circuito do chorus do JC-120):
+//  - BBD de 512 estágios (MN3002) com atraso base de ~2,5 ms
+//  - LFO triangular; no CE-1 o knob Intensity aumenta profundidade E velocidade (~1 Hz a ~3 Hz,
+//    ~1,75 Hz no meio)
+//  - Caminho molhado escuro: filtros anti-aliasing/reconstrução do BBD (~8 kHz), queda de ~3 dB/oitava
+//    a partir de 1 kHz e leve realce de médios-graves
+//  - Saídas estéreo como no JC-120: um lado direto (seco), o outro só efeito; em mono, 50/50
+class CE1Chorus
 {
 public:
     void prepare (double sampleRate)
     {
         fs = sampleRate;
-        buf.assign (8192, 0.0f);
-        w = 0; lfo = 0;
+        buf.assign (4096, 0.0f);
+        w = 0; lfo = 0.25;
+        preLp.lowpass (fs, 8000.0, 0.707);  postLp.lowpass (fs, 8000.0, 0.707);
+        postLp2.lowpass (fs, 9000.0, 0.54);
+        tilt.setCutoff (fs, 1000.0);
+        lowMid.peak (fs, 220.0, 0.8, 1.5);
+        preLp.reset(); postLp.reset(); postLp2.reset(); tilt.reset(); lowMid.reset();
     }
 
-    void setRate (float hz)    { rateHz = juce::jlimit (0.05, 10.0, (double) hz); }
-    void setDepth (float d01)  { depthMs = 0.2 + 4.8 * juce::jlimit (0.0, 1.0, (double) d01); }
-
-    inline void process (float x, float& left, float& right) noexcept
+    // intensity: 0..1 (knob DEPTH)   rateTrim: 0..1 (knob RATE; 0,5 = igual ao CE-1)
+    void setControls (float intensity, float rateTrim)
     {
-        buf[(size_t) w] = x;
+        intens = juce::jlimit (0.0f, 1.0f, intensity);
+        const double mult = std::pow (2.0, (juce::jlimit (0.0f, 1.0f, rateTrim) - 0.5) * 2.0);
+        rateHz = 1.0 * std::pow (3.0, (double) intens) * mult;
+        widthMs = 0.6 + 3.4 * (double) intens;
+    }
+
+    inline void process (float x, float& direct, float& effect) noexcept
+    {
+        // Entrada do BBD (filtro anti-aliasing)
+        buf[(size_t) w] = preLp.process (x);
         lfo += rateHz / fs;
         if (lfo >= 1.0) lfo -= 1.0;
-        const double delayMs = 7.0 + depthMs * std::sin (2 * kPi * lfo);
+        const double tri = lfo < 0.5 ? 4.0 * lfo - 1.0 : 3.0 - 4.0 * lfo;      // -1..1 triangular
+        const double delayMs = baseMs + 0.5 * widthMs * (tri + 1.0);
         const double d = delayMs * 0.001 * fs;
-        double pos = (double) w - d;
+        const double pos = (double) w - d;
         const double fl = std::floor (pos);
         const float t = (float) (pos - fl);
         const int i = (int) fl;
-        const float a = buf[(size_t) (i & 8191)], b = buf[(size_t) ((i + 1) & 8191)];
-        w = (w + 1) & 8191;
-        left = x;
-        right = a + (b - a) * t;
+        auto at = [this] (int k) { return buf[(size_t) (k & 4095)]; };
+        const float ym1 = at (i - 1), y0 = at (i), y1 = at (i + 1), y2 = at (i + 2);
+        const float c1 = 0.5f * (y1 - ym1), c2 = ym1 - 2.5f * y0 + 2.0f * y1 - 0.5f * y2, c3 = 0.5f * (y2 - ym1) + 1.5f * (y0 - y1);
+        float wet = ((c3 * t + c2) * t + c1) * t + y0;
+        w = (w + 1) & 4095;
+
+        // Reconstrução do BBD + caráter escuro do CE-1
+        wet = postLp2.process (postLp.process (wet));
+        wet = 0.5f * wet + 0.5f * tilt.lp (wet);          // ~ -3 dB/oitava acima de 1 kHz
+        wet = lowMid.process (wet);
+        wet = std::tanh (wet * 1.3f) / 1.3f;               // o CE-1 satura fácil
+        direct = x;
+        effect = wet * 1.12f;
     }
 
 private:
     std::vector<float> buf;
-    double fs = 48000, lfo = 0, rateHz = 0.8, depthMs = 2.5;
+    double fs = 48000, lfo = 0.25, rateHz = 1.73, widthMs = 2.3;
+    const double baseMs = 2.5;
+    float intens = 0.5f;
     int w = 0;
+    Biquad preLp, postLp, postLp2, lowMid;
+    OnePole tilt;
 };
 } // namespace vlv

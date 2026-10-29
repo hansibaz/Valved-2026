@@ -25,7 +25,7 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
 
     p.push_back (dbParam (ParamID::input, "Input", -24.0f, 24.0f, 0.0f));
     p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamID::gate, 1 }, "Noise Gate",
-        NormalisableRange<float> (-90.0f, -20.0f, 0.1f), -90.0f,
+        NormalisableRange<float> (-90.0f, -20.0f, 0.1f), -70.0f,
         AudioParameterFloatAttributes().withStringFromValueFunction (
             [] (float v, int) { return v <= -89.0f ? String ("Off") : String (v, 0) + " dB"; })));
     p.push_back (std::make_unique<AudioParameterInt> (ParameterID { ParamID::transpose, 1 }, "Transpose",
@@ -55,10 +55,11 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::britMode, 1 }, "Brit 410 Mode",
         StringArray { "80's", "Modern" }, 0));
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::chorus, 1 }, "Chorus", false));
+    // Rate: 5 = velocidade original do CE-1 (de 0,5x a 2x)
     p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamID::chorusRate, 1 }, "Chorus Rate",
-        NormalisableRange<float> (0.1f, 6.0f, 0.01f, 0.5f), 0.8f,
-        AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
-            [] (float v, int) { return String (v, 2) + " Hz"; })));
+        NormalisableRange<float> (0.0f, 10.0f, 0.01f), 5.0f,
+        AudioParameterFloatAttributes().withStringFromValueFunction (
+            [] (float v, int) { return "x" + String (std::pow (2.0f, (v - 5.0f) / 5.0f), 2); })));
     p.push_back (knob (ParamID::chorusDepth, "Chorus Depth", 5.0f));
 
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::cabOn, 1 }, "Cab On", true));
@@ -72,6 +73,8 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
 
     // ---- Pedais (antes do amp)
     static const char* pedalLabels[] = { "Green Drive", "Yellow Drive", "Gold Drive", "Blue Drive" };
+    // Level inicial de cada pedal ~ volume igual ao bypass (os circuitos originais têm ganhos bem diferentes)
+    static const float defaultLevel[] = { 7.8f, 6.4f, 3.5f, 5.3f };
     for (int i = 0; i < 4; ++i)
     {
         const String nm (pedalLabels[i]);
@@ -83,9 +86,19 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
             NormalisableRange<float> (0.0f, 10.0f, 0.01f), 5.0f,
             AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (v, 1); })));
         p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamID::pedal (i, "Level"), 1 }, nm + " Level",
-            NormalisableRange<float> (0.0f, 10.0f, 0.01f), 6.0f,
+            NormalisableRange<float> (0.0f, 10.0f, 0.01f), defaultLevel[i],
             AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (v, 1); })));
     }
+
+    p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::greenMode, 1 }, "Green Drive Mode",
+        StringArray { "TS808", "TS9" }, 0));
+
+    // ---- Compressor (antes dos drives)
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::compOn, 1 }, "Comp On", false));
+    p.push_back (knob (ParamID::compSustain, "Comp Sustain", 5.0f));
+    p.push_back (knob (ParamID::compLevel, "Comp Level", 6.0f));
+    p.push_back (knob (ParamID::compAttack, "Comp Attack", 4.0f));
+    p.push_back (knob (ParamID::compClip, "Comp Clip", 3.0f));
 
     // ---- Delay
     auto pct = [] (const char* id, const char* name, float def)
@@ -155,6 +168,11 @@ ValvedProcessor::ValvedProcessor()
             pPedal[i][k++] = apvts.getRawParameterValue (ParamID::pedal (i, suffix));
     }
     {
+        const char* cids[] = { ParamID::compOn, ParamID::compSustain, ParamID::compLevel, ParamID::compAttack, ParamID::compClip };
+        for (int k = 0; k < 5; ++k) pComp[k] = apvts.getRawParameterValue (cids[k]);
+        pGreenMode = apvts.getRawParameterValue (ParamID::greenMode);
+    }
+    {
         const char* ids[] = { ParamID::dlyOn, ParamID::dlyType, ParamID::dlyTime, ParamID::dlySync, ParamID::dlyDiv,
                               ParamID::dlyRepeats, ParamID::dlyMix, ParamID::dlyTone, ParamID::dlyMod, ParamID::dlyParam };
         for (int k = 0; k < 10; ++k) pDly[k] = apvts.getRawParameterValue (ids[k]);
@@ -183,9 +201,12 @@ void ValvedProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 
     gate.prepare (sampleRate);
     shifter.prepare (sampleRate);
+    gateGains.assign ((size_t) juce::jmax (1, samplesPerBlock), 1.0f);
+    gateDelay.assign (1 << 13, 1.0f); gateDelayW = 0;
     amp.prepare (sampleRate, samplesPerBlock);
     chorus.prepare (sampleRate);
     for (auto& pd : pedals) pd.prepare (sampleRate, samplesPerBlock);
+    compressor.prepare (sampleRate, samplesPerBlock);
     delay.prepare (sampleRate);
     reverb.prepare (sampleRate);
 
@@ -235,6 +256,9 @@ void ValvedProcessor::refreshCab (bool force)
 void ValvedProcessor::timerCallback()
 {
     if (prepared) refreshCab (false);
+    // Informa à DAW o atraso do transpose (compensação automática)
+    const int lat = shifter.getSemitones() != 0 ? shifter.getLatencySamples() : 0;
+    if (lat != getLatencySamples()) setLatencySamples (lat);
 }
 
 bool ValvedProcessor::loadUserIR (const juce::File& file)
@@ -289,17 +313,29 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     }
     inputMeter = juce::jmax (inPeak, inputMeter.load() * 0.8f);
 
-    // 3) Noise gate -> 4) Transpose -> 5) Amp
+    // 3) Noise gate: detecta na guitarra limpa, mas só atenua depois do amp (estilo "Decimator"),
+    //    assim o chiado amplificado pelos drives/amp some no silêncio sem mexer no timbre.
+    //    4) Transpose
+    if ((int) gateGains.size() < n) gateGains.resize ((size_t) n, 1.0f);
     gate.setThresholdDb (pGate->load());
     shifter.setSemitones ((int) std::lround (pTranspose->load()));
+    const int keyDelay = juce::jmin (shifter.getLatencySamples(), (int) gateDelay.size() - 1);
+    const int gdMask = (int) gateDelay.size() - 1;
     for (int i = 0; i < n; ++i)
     {
-        m[i] = gate.process (m[i]);
+        // o ganho do gate é atrasado junto com o transpose, para ficar alinhado com o áudio
+        gateDelay[(size_t) gateDelayW] = gate.keyGain (m[i]);
+        gateGains[(size_t) i] = gateDelay[(size_t) ((gateDelayW - keyDelay) & gdMask)];
+        gateDelayW = (gateDelayW + 1) & gdMask;
         m[i] = shifter.process (m[i]);
     }
     gateMeter = gate.getGain();
 
-    // 5) Pedais de overdrive (Green -> Yellow -> Gold -> Blue), antes do amp
+    // 5) Compressor -> overdrives (Green -> Yellow -> Gold -> Blue), antes do amp
+    compressor.setEnabled (pComp[0]->load() > 0.5f);
+    compressor.setParams (pComp[1]->load(), pComp[2]->load(), pComp[3]->load(), pComp[4]->load());
+    compressor.process (m, n);
+    pedals[0].setVariant (pGreenMode->load() > 0.5f ? 1 : 0);
     for (int i = 0; i < 4; ++i)
     {
         pedals[i].setParams (pPedal[i][0]->load() > 0.5f, pPedal[i][1]->load(), pPedal[i][2]->load(), pPedal[i][3]->load());
@@ -314,9 +350,9 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     st.recModern = pRecMode->load() > 0.5f;
     st.britModern = pBritMode->load() > 0.5f;
     amp.setParameters (st);
-    chorus.setRate (pChorusRate->load());
-    chorus.setDepth (pChorusDepth->load() / 10.0f);
+    chorus.setControls (pChorusDepth->load() / 10.0f, pChorusRate->load() / 10.0f);
     amp.process (m, n);
+    for (int i = 0; i < n; ++i) m[i] *= gateGains[(size_t) i];
 
     // 6) Divide em estéreo com o chorus (lado esquerdo seco, direito com chorus)
     // O chorus faz parte do Jazz 120 (só funciona nele)

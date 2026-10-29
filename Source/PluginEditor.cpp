@@ -143,7 +143,10 @@ void ValvedEditor::timerCallback()
     head.refreshState();
 
     const int semis = (int) std::lround (proc.apvts.getRawParameterValue (ParamID::transpose)->load());
-    tuningLabel.setText (tuningName (semis), juce::dontSendNotification);
+    juce::String tn = tuningName (semis);
+    if (semis != 0 && proc.getSampleRate() > 0 && proc.getLatencySamples() > 0)
+        tn += "   |   " + juce::String (1000.0 * proc.getLatencySamples() / proc.getSampleRate(), 0) + " ms latency";
+    tuningLabel.setText (tn, juce::dontSendNotification);
 
     if (page == PageCab) cabPage.refresh();
     if (page == PagePedals) pedalsPage.refresh();
@@ -167,7 +170,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.6", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.8", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
 
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawText ("IN", inMeter.getBounds().translated (0, inMeter.getHeight() + 2).withHeight (12).expanded (8, 0), juce::Justification::centred);
