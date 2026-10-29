@@ -1,0 +1,42 @@
+name: Build Valved
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Baixar ASIO SDK da Steinberg
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://www.steinberg.net/asiosdk" -OutFile asiosdk.zip
+          Expand-Archive asiosdk.zip -DestinationPath asiosdk_tmp -Force
+          $h = Get-ChildItem asiosdk_tmp -Recurse -Filter iasiodrv.h | Select-Object -First 1
+          if ($h) {
+            $dir = $h.Directory.FullName -replace '\\', '/'
+            "ASIO_SDK_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          }
+
+      - name: Configurar
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DASIO_SDK_DIR="${{ env.ASIO_SDK_DIR }}"
+
+      - name: Compilar
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Empacotar
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item -Recurse "build/Valved_artefacts/Release/VST3/Valved.vst3" dist/
+          Copy-Item "build/Valved_artefacts/Release/Standalone/Valved.exe" dist/
+          Compress-Archive -Path dist/* -DestinationPath Valved-Windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Valved-Windows
+          path: Valved-Windows.zip
