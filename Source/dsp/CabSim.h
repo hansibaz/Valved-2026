@@ -1,6 +1,7 @@
 #pragma once
 #include <juce_dsp/juce_dsp.h>
 #include "Biquad.h"
+#include "CabV30.h"
 
 namespace vlv
 {
@@ -21,6 +22,30 @@ inline juce::AudioBuffer<float> makeCabIR (int type, float micX, float micDist, 
     juce::AudioBuffer<float> ir (1, n);
     ir.clear();
     float* d = ir.getWritePointer (0);
+
+    // 4x12 Vintage: curva oficial do Celestion Vintage 30 (ver CabV30.h).
+    // Na posição padrão do microfone a resposta é exatamente a do fabricante.
+    if (type == Cab4x12Vintage)
+    {
+        auto v = v30::makeIR (fs, n, micX, micDist);
+        for (int i = 0; i < n; ++i) d[i] = v[(size_t) i];
+        // reflexões da sala só quando o microfone se afasta da posição padrão
+        const float far = juce::jmax (0.0f, (micDist - 0.1f) / 0.9f);
+        if (far > 0.0f)
+        {
+            std::vector<float> dry (v);
+            const int r1 = (int) ((0.4 + 2.6 * micDist) * 0.001 * fs), r2 = (int) ((1.3 + 5.0 * micDist) * 0.001 * fs);
+            for (int i = 0; i < n; ++i)
+            {
+                if (i >= r1) d[i] += (0.40f * far) * dry[(size_t) (i - r1)];
+                if (i >= r2) d[i] -= (0.15f * far) * dry[(size_t) (i - r2)];
+            }
+        }
+        const int fade = n / 4;
+        for (int i = 0; i < fade; ++i)
+            d[n - fade + i] *= 1.0f - (float) i / (float) fade;
+        return ir;
+    }
 
     // Impulso direto + reflexão do chão/sala que aparece com a distância
     d[0] = 1.0f;
