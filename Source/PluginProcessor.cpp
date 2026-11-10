@@ -35,6 +35,7 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
     StringArray ampNames;
     for (auto* nm : vlv::ampNames()) ampNames.add (nm);
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::amp, 1 }, "Amp", ampNames, 1));
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::neural, 1 }, "Neural", true));
 
     // Regulagem própria de cada amp (todos começam com os knobs no meio)
     for (int m = 0; m < 4; ++m)
@@ -141,6 +142,7 @@ ValvedProcessor::ValvedProcessor()
     pGate      = apvts.getRawParameterValue (ParamID::gate);
     pTranspose = apvts.getRawParameterValue (ParamID::transpose);
     pAmp       = apvts.getRawParameterValue (ParamID::amp);
+    pNeural    = apvts.getRawParameterValue (ParamID::neural);
     for (int m = 0; m < 4; ++m)
     {
         const char* knobs[] = { ParamID::gain, ParamID::bass, ParamID::mid, ParamID::treble, ParamID::presence, ParamID::master, ParamID::resonance };
@@ -199,6 +201,8 @@ void ValvedProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     gateGains.assign ((size_t) juce::jmax (1, samplesPerBlock), 1.0f);
     gateDelay.assign (1 << 13, 1.0f); gateDelayW = 0;
     amp.prepare (sampleRate, samplesPerBlock);
+    neuralAmp.prepare (sampleRate, samplesPerBlock);
+    lastNeural = pNeural->load() > 0.5f;
     chorus.prepare (sampleRate);
     for (auto& pd : pedals) pd.prepare (sampleRate, samplesPerBlock);
     compressor.prepare (sampleRate, samplesPerBlock);
@@ -252,7 +256,8 @@ void ValvedProcessor::timerCallback()
 {
     if (prepared) refreshCab (false);
     // Informa à DAW o atraso do transpose (compensação automática)
-    const int lat = shifter.getSemitones() != 0 ? shifter.getLatencySamples() : 0;
+    int lat = shifter.getSemitones() != 0 ? shifter.getLatencySamples() : 0;
+    if (pNeural->load() > 0.5f) lat += neuralAmp.getLatencySamples();
     if (lat != getLatencySamples()) setLatencySamples (lat);
 }
 
@@ -350,9 +355,24 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     auto knobVal = [this, &st] (int k) { auto* p = pAmpKnob[st.model][k]; return p != nullptr ? p->load() : 5.0f; };
     st.gain = knobVal (0); st.bass = knobVal (1); st.mid = knobVal (2); st.treble = knobVal (3);
     st.presence = knobVal (4); st.master = knobVal (5); st.resonance = knobVal (6);
-    amp.setParameters (st);
     chorus.setControls (pChorusDepth->load() / 10.0f, pChorusRate->load() / 10.0f);
-    amp.process (m, n);
+    const bool useNeural = pNeural->load() > 0.5f;
+    if (useNeural != lastNeural)
+    {
+        // troca de motor: começa do zero para não estalar com estado antigo
+        if (useNeural) neuralAmp.reset(); else amp.reset();
+        lastNeural = useNeural;
+    }
+    if (useNeural)
+    {
+        neuralAmp.setParameters (st.model, st.gain, st.bass, st.mid, st.treble, st.presence, st.master, st.resonance);
+        neuralAmp.process (m, n);
+    }
+    else
+    {
+        amp.setParameters (st);
+        amp.process (m, n);
+    }
     for (int i = 0; i < n; ++i) m[i] *= gateGains[(size_t) i];
 
     // 6) Divide em estéreo com o chorus (lado esquerdo seco, direito com chorus)

@@ -55,6 +55,8 @@ private:
     LevelMeter inMeter, outMeter;
 
     juce::OwnedArray<juce::TextButton> ampButtons;
+    juce::TextButton neuralButton { "NEURAL" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> neuralAttachment;
     AmpHead head;
     CabPage cabPage;
     PedalsPage pedalsPage;

@@ -91,6 +91,12 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
         addAndMakeVisible (b);
     }
 
+    // Liga/desliga o motor neural (capturas dos amps reais). Desligado = motor de circuito antigo.
+    neuralButton.setClickingTogglesState (true);
+    neuralButton.setTooltip ("Neural: captures of the real amps. Off: circuit model.");
+    neuralAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (p.apvts, ParamID::neural, neuralButton);
+    addAndMakeVisible (neuralButton);
+
     addAndMakeVisible (head);
     addChildComponent (cabPage);
     addChildComponent (pedalsPage);
@@ -117,6 +123,7 @@ void ValvedEditor::showPage (int newPage)
     fxTab.setToggleState (page == PageFx, juce::dontSendNotification);
     head.setVisible (page == PageAmp);
     for (auto* b : ampButtons) b->setVisible (page == PageAmp);
+    neuralButton.setVisible (page == PageAmp);
     cabPage.setVisible (page == PageCab);
     pedalsPage.setVisible (page == PagePedals);
     fxPage.setVisible (page == PageFx);
@@ -170,7 +177,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.9", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.10 neural", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
 
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawText ("IN", inMeter.getBounds().translated (0, inMeter.getHeight() + 2).withHeight (12).expanded (8, 0), juce::Justification::centred);
@@ -215,6 +222,7 @@ void ValvedEditor::resized()
     auto m = mainArea;
     auto sel = m.removeFromTop (56).withSizeKeepingCentre (640, 34).translated (0, 6);
     const int bw = (sel.getWidth() - 3 * 8) / 4;
+    neuralButton.setBounds (sel.getRight() + 24, sel.getY(), 110, sel.getHeight());
     for (auto* b : ampButtons) { b->setBounds (sel.removeFromLeft (bw)); sel.removeFromLeft (8); }
     head.setBounds (m.reduced (10, 4));
 

@@ -5,6 +5,7 @@
 #include "dsp/PitchShifter.h"
 #include "dsp/TransposeShifter.h"
 #include "dsp/AmpModel.h"
+#include "dsp/NeuralAmp.h"
 #include "dsp/CabSim.h"
 #include "dsp/Overdrive.h"
 #include "dsp/Delay.h"
@@ -26,6 +27,7 @@ namespace ParamID
     inline constexpr const char* chorusRate  = "chorusRate";
     inline constexpr const char* chorusDepth = "chorusDepth";
     inline constexpr const char* resonance = "resonance";
+    inline constexpr const char* neural    = "neural";      // motor neural (capturas dos amps reais) x circuito
 
     // Cada amp guarda a própria regulagem: "a0_gain", "a1_gain", ...
     inline juce::String ampKnob (int model, const char* knob) { return "a" + juce::String (model) + "_" + knob; }
@@ -130,6 +132,8 @@ private:
     vlv::TransposeShifter shifter;
     std::vector<float> gateGains, gateDelay; int gateDelayW = 0;
     vlv::AmpModel amp;
+    vlv::NeuralAmp neuralAmp;
+    bool lastNeural = true;
     vlv::CE1Chorus chorus;
     vlv::CabSim cab;
     vlv::Overdrive pedals[4] { vlv::Overdrive (vlv::PedalGreen), vlv::Overdrive (vlv::PedalYellow),
@@ -151,6 +155,7 @@ private:
     std::atomic<float>* pOutput;
     std::atomic<float>* pChorusRate; std::atomic<float>* pChorusDepth;
     std::atomic<float>* pResonance;
+    std::atomic<float>* pNeural;
     std::atomic<float>* pAmpKnob[4][7] {};   // [amp][gain, bass, mid, treble, presence, master, resonance]
     std::atomic<float>* pPedal[4][4];   // [pedal][on, drive, tone, level]
     std::atomic<float>* pDly[10];
