@@ -55,8 +55,8 @@ private:
     LevelMeter inMeter, outMeter;
 
     juce::OwnedArray<juce::TextButton> ampButtons;
-    juce::TextButton neuralButton { "NEURAL" };
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> neuralAttachment;
+    // Motor do amp: CIRCUIT (primeira versão), NEURAL (capturas) e SCHEMATIC (esquema, só Brit80)
+    juce::OwnedArray<juce::TextButton> engineButtons;
     AmpHead head;
     CabPage cabPage;
     PedalsPage pedalsPage;

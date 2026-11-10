@@ -1,5 +1,6 @@
 #include "CabPage.h"
 #include "../PluginProcessor.h"
+#include "../dsp/CabMics.h"
 
 using namespace ui;
 
@@ -187,6 +188,53 @@ CabPage::CabPage (ValvedProcessor& p) : proc (p), speaker (p.apvts)
     addAndMakeVisible (distance);
     distanceAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (p.apvts, ParamID::micDist, distance);
 
+    // Seleção do microfone
+    const auto micNames = vlv::getMicNames();
+    for (int i = 0; i < micNames.size(); ++i)
+    {
+        auto* b = micButtons.add (new juce::TextButton (micNames[i]));
+        b->onClick = [this, i]
+        {
+            if (auto* prm = proc.apvts.getParameter (ParamID::mic))
+            {
+                prm->beginChangeGesture();
+                prm->setValueNotifyingHost (prm->convertTo0to1 ((float) i));
+                prm->endChangeGesture();
+            }
+        };
+        addAndMakeVisible (b);
+    }
+    for (auto* b : { &bassCut, &presence })
+    {
+        b->setClickingTogglesState (true);
+        addChildComponent (b);
+    }
+    for (int i = 0; i < 5; ++i)
+    {
+        auto* b = mdBass.add (new juce::TextButton (juce::StringArray { "M", "2", "3", "4", "S" }[i]));
+        b->setTooltip ("MD421 bass switch: M = music (flat) .. S = speech (max cut)");
+        b->onClick = [this, i]
+        {
+            if (auto* prm = proc.apvts.getParameter (ParamID::md421Bass))
+            {
+                prm->beginChangeGesture();
+                prm->setValueNotifyingHost (prm->convertTo0to1 ((float) i));
+                prm->endChangeGesture();
+            }
+        };
+        addChildComponent (b);
+    }
+    bassCutAtt  = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (p.apvts, ParamID::micBassCut, bassCut);
+    presenceAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (p.apvts, ParamID::micPresence, presence);
+
+    angle.setSliderStyle (juce::Slider::LinearHorizontal);
+    angle.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+    angle.setColour (juce::Slider::trackColourId, accent);
+    angle.setColour (juce::Slider::backgroundColourId, line);
+    angle.setColour (juce::Slider::thumbColourId, text);
+    addAndMakeVisible (angle);
+    angleAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (p.apvts, ParamID::micAngle, angle);
+
     addAndMakeVisible (speaker);
 }
 
@@ -215,7 +263,25 @@ void CabPage::refresh()
     const bool user = cab == vlv::CabUserIR;
     speaker.setActive (! user);
     distance.setEnabled (! user);
+    angle.setEnabled (! user);
+    const int mic = (int) proc.apvts.getRawParameterValue (ParamID::mic)->load();
+    for (int i = 0; i < micButtons.size(); ++i)
+    {
+        micButtons[i]->setToggleState (i == mic, juce::dontSendNotification);
+        micButtons[i]->setEnabled (! user);
+    }
+    const bool sm7b = mic == vlv::mics::SM7B && ! user;
+    bassCut.setVisible (sm7b);
+    presence.setVisible (sm7b);
+    const bool md = mic == vlv::mics::MD421 && ! user;
+    const int mdPos = (int) proc.apvts.getRawParameterValue (ParamID::md421Bass)->load();
+    for (int i = 0; i < mdBass.size(); ++i)
+    {
+        mdBass[i]->setVisible (md);
+        mdBass[i]->setToggleState (i == mdPos, juce::dontSendNotification);
+    }
     speaker.repaint();
+    repaint (micArea);
 }
 
 void CabPage::paint (juce::Graphics& g)
@@ -233,13 +299,29 @@ void CabPage::paint (juce::Graphics& g)
     g.drawText ("IMPULSE RESPONSE", juce::Rectangle<int> (left.getX() + 22, loadIR.getY() - 28, 200, 20), juce::Justification::centredLeft);
     g.drawText ("CAB / IR", juce::Rectangle<int> (cabOn.getRight() + 8, cabOn.getY(), 120, cabOn.getHeight()).withTrimmedTop (8), juce::Justification::centredLeft);
 
-    // Rótulos da distância
+    // Rótulos do microfone: distância real (mm) e ângulo
+    const float md = proc.apvts.getRawParameterValue (ParamID::micDist)->load();
+    const float ma = proc.apvts.getRawParameterValue (ParamID::micAngle)->load();
     auto dl = distance.getBounds();
     g.setFont (Fonts::condensedBold (14.0f));
-    g.drawText ("MIC DISTANCE", dl.withY (dl.getY() - 20).withHeight (18), juce::Justification::centred);
+    g.drawText ("MIC DISTANCE  " + juce::String (juce::roundToInt (vlv::mics::distanceMm (md))) + " mm",
+                dl.withY (dl.getY() - 20).withHeight (18), juce::Justification::centred);
     g.setFont (Fonts::condensed (13.0f));
-    g.drawText ("CLOSE", dl.withY (dl.getBottom()).withHeight (16), juce::Justification::centredLeft);
-    g.drawText ("FAR", dl.withY (dl.getBottom()).withHeight (16), juce::Justification::centredRight);
+    g.drawText ("ON GRILLE", dl.withY (dl.getBottom()).withHeight (16), juce::Justification::centredLeft);
+    g.drawText ("30 cm", dl.withY (dl.getBottom()).withHeight (16), juce::Justification::centredRight);
+    auto al = angle.getBounds();
+    g.setFont (Fonts::condensedBold (14.0f));
+    g.drawText ("MIC ANGLE  " + juce::String (juce::roundToInt (ma)) + juce::String (juce::CharPointer_UTF8 ("\xc2\xb0")),
+                al.withY (al.getY() - 20).withHeight (18), juce::Justification::centred);
+    g.setFont (Fonts::condensed (13.0f));
+    g.drawText ("ON AXIS", al.withY (al.getBottom()).withHeight (16), juce::Justification::centredLeft);
+    g.drawText (juce::String (juce::CharPointer_UTF8 ("90\xc2\xb0")), al.withY (al.getBottom()).withHeight (16), juce::Justification::centredRight);
+    if (! micButtons.isEmpty())
+    {
+        g.setFont (Fonts::condensedBold (14.0f));
+        auto mb = micButtons.getFirst()->getBounds();
+        g.drawText ("MIC", juce::Rectangle<int> (mb.getX() - 46, mb.getY(), 40, mb.getHeight()), juce::Justification::centredRight);
+    }
 
     g.setColour (textDim.withAlpha (0.8f));
     g.setFont (Fonts::condensed (14.0f));
@@ -265,9 +347,28 @@ void CabPage::resized()
     cabOn.setBounds (l.removeFromTop (70).removeFromLeft (56));
 
     auto rr = right;
-    auto bottom = rr.removeFromBottom (60);
+    auto bottom = rr.removeFromBottom (112);
+    micArea = bottom;
     rr.removeFromTop (26);
     const int s = juce::jmin (rr.getWidth(), rr.getHeight());
     speaker.setBounds (rr.withSizeKeepingCentre (s, s));
-    distance.setBounds (bottom.withSizeKeepingCentre (juce::jmin (360, bottom.getWidth()), 22).translated (0, 4));
+
+    // linha 1: microfones (+ chaves do SM7B); linha 2: distância e ângulo
+    auto row1 = bottom.removeFromTop (34);
+    const int mw = 84, sw = 104, gap = 8;
+    const int groupW = micButtons.size() * (mw + gap) + 2 * (sw + gap) - gap;
+    auto g1 = row1.withSizeKeepingCentre (juce::jmin (groupW, row1.getWidth()), 34).translated (20, 0);
+    for (auto* b : micButtons) { b->setBounds (g1.removeFromLeft (mw)); g1.removeFromLeft (gap); }
+    auto sw7 = g1;
+    bassCut.setBounds (g1.removeFromLeft (sw)); g1.removeFromLeft (gap);
+    presence.setBounds (g1.removeFromLeft (sw));
+    // MD421: 5 posições no mesmo lugar das chaves do SM7B
+    const int bw5 = (sw7.getWidth() - 4 * 5) / 5;
+    for (auto* b : mdBass) { b->setBounds (sw7.removeFromLeft (bw5)); sw7.removeFromLeft (5); }
+    bottom.removeFromTop (30);
+    auto row2 = bottom.removeFromTop (22);
+    const int sl = juce::jmin (300, (row2.getWidth() - 40) / 2);
+    auto r2 = row2.withSizeKeepingCentre (sl * 2 + 40, 22);
+    distance.setBounds (r2.removeFromLeft (sl));
+    angle.setBounds (r2.removeFromRight (sl));
 }

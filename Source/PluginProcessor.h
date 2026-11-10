@@ -6,6 +6,7 @@
 #include "dsp/TransposeShifter.h"
 #include "dsp/AmpModel.h"
 #include "dsp/NeuralAmp.h"
+#include "dsp/Schematic2203.h"
 #include "dsp/CabSim.h"
 #include "dsp/Overdrive.h"
 #include "dsp/Delay.h"
@@ -27,7 +28,7 @@ namespace ParamID
     inline constexpr const char* chorusRate  = "chorusRate";
     inline constexpr const char* chorusDepth = "chorusDepth";
     inline constexpr const char* resonance = "resonance";
-    inline constexpr const char* neural    = "neural";      // motor neural (capturas dos amps reais) x circuito
+    inline constexpr const char* engine    = "engine";      // motor do amp: 0 Circuit, 1 Neural, 2 Schematic
 
     // Cada amp guarda a própria regulagem: "a0_gain", "a1_gain", ...
     inline juce::String ampKnob (int model, const char* knob) { return "a" + juce::String (model) + "_" + knob; }
@@ -35,6 +36,11 @@ namespace ParamID
     inline constexpr const char* cab       = "cab";
     inline constexpr const char* micX      = "micX";
     inline constexpr const char* micDist   = "micDist";
+    inline constexpr const char* mic       = "mic";          // modelo do microfone
+    inline constexpr const char* micAngle  = "micAngle";     // graus fora do eixo
+    inline constexpr const char* micBassCut  = "micBassCut"; // SM7B: bass rolloff
+    inline constexpr const char* micPresence = "micPresence";// SM7B: presence boost
+    inline constexpr const char* md421Bass   = "md421Bass";  // MD421: chave de graves M..S
     inline constexpr const char* output    = "output";
 
     // Pedais (prefixos: green, yellow, gold, blue + On/Drive/Tone/Level)
@@ -133,7 +139,17 @@ private:
     std::vector<float> gateGains, gateDelay; int gateDelayW = 0;
     vlv::AmpModel amp;
     vlv::NeuralAmp neuralAmp;
-    bool lastNeural = true;
+    vlv::SchematicAmp schematicAmp;     // JCM800 2203 pelo esquema (só no Brit80)
+    int lastEngine = -1;
+public:
+    enum Engine { EngineCircuit = 0, EngineNeural = 1, EngineSchematic = 2 };
+    // motor que está tocando de fato (o Schematic só existe no Brit80; nos outros cai no circuito)
+    int activeEngine() const
+    {
+        const int e = (int) pEngine->load();
+        return (e == EngineSchematic && (int) pAmp->load() != 1) ? EngineCircuit : e;
+    }
+private:
     vlv::CE1Chorus chorus;
     vlv::CabSim cab;
     vlv::Overdrive pedals[4] { vlv::Overdrive (vlv::PedalGreen), vlv::Overdrive (vlv::PedalYellow),
@@ -152,10 +168,11 @@ private:
     std::atomic<float>* pMid; std::atomic<float>* pTreble; std::atomic<float>* pPresence;
     std::atomic<float>* pMaster; std::atomic<float>* pChorus; std::atomic<float>* pCabOn;
     std::atomic<float>* pCab; std::atomic<float>* pMicX; std::atomic<float>* pMicDist;
+    std::atomic<float>* pMic; std::atomic<float>* pMicAngle; std::atomic<float>* pMicBassCut; std::atomic<float>* pMicPresence; std::atomic<float>* pMd421Bass;
     std::atomic<float>* pOutput;
     std::atomic<float>* pChorusRate; std::atomic<float>* pChorusDepth;
     std::atomic<float>* pResonance;
-    std::atomic<float>* pNeural;
+    std::atomic<float>* pEngine;
     std::atomic<float>* pAmpKnob[4][7] {};   // [amp][gain, bass, mid, treble, presence, master, resonance]
     std::atomic<float>* pPedal[4][4];   // [pedal][on, drive, tone, level]
     std::atomic<float>* pDly[10];
@@ -165,6 +182,7 @@ private:
 
     // Estado do gabinete (lido no timer, na thread da interface)
     int lastCab = -1; float lastMicX = -1, lastMicDist = -1;
+    int lastMic = -1; float lastMicAngle = -1; bool lastBassCut = false, lastPresence = false; int lastMd421Bass = -1;
     juce::File userIRFile;
     bool userIRLoaded = false;
     std::atomic<bool> prepared { false };

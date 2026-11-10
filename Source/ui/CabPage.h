@@ -50,6 +50,14 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> cabOnAtt;
     juce::Slider distance;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> distanceAtt;
+    // Microfone: modelo, ângulo e as chaves do SM7B
+    juce::OwnedArray<juce::TextButton> micButtons;
+    juce::TextButton bassCut { "BASS CUT" }, presence { "PRESENCE" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bassCutAtt, presenceAtt;
+    juce::OwnedArray<juce::TextButton> mdBass;   // MD421: chave de graves M, 2, 3, 4, S
+    juce::Slider angle;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> angleAtt;
+    juce::Rectangle<int> micArea;
     SpeakerView speaker;
     std::unique_ptr<juce::FileChooser> chooser;
     juce::Rectangle<int> left, right;

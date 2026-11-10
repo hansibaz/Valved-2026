@@ -35,7 +35,7 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
     StringArray ampNames;
     for (auto* nm : vlv::ampNames()) ampNames.add (nm);
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::amp, 1 }, "Amp", ampNames, 1));
-    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::neural, 1 }, "Neural", true));
+    p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::engine, 1 }, "Amp Engine", StringArray { "Circuit", "Neural", "Schematic" }, 1));
 
     // Regulagem própria de cada amp (todos começam com os knobs no meio)
     for (int m = 0; m < 4; ++m)
@@ -66,6 +66,12 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
         NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.25f));
     p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamID::micDist, 1 }, "Mic Distance",
         NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.1f));
+    p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::mic, 1 }, "Microphone", vlv::getMicNames(), 0));
+    p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamID::micAngle, 1 }, "Mic Angle",
+        NormalisableRange<float> (0.0f, 90.0f, 1.0f), 0.0f, AudioParameterFloatAttributes().withLabel ("deg")));
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::micBassCut, 1 }, "SM7B Bass Cut", false));
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::micPresence, 1 }, "SM7B Presence", false));
+    p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::md421Bass, 1 }, "MD421 Bass", StringArray { "M", "2", "3", "4", "S" }, 0));
 
     p.push_back (dbParam (ParamID::output, "Output", -36.0f, 12.0f, 0.0f));
 
@@ -142,7 +148,7 @@ ValvedProcessor::ValvedProcessor()
     pGate      = apvts.getRawParameterValue (ParamID::gate);
     pTranspose = apvts.getRawParameterValue (ParamID::transpose);
     pAmp       = apvts.getRawParameterValue (ParamID::amp);
-    pNeural    = apvts.getRawParameterValue (ParamID::neural);
+    pEngine    = apvts.getRawParameterValue (ParamID::engine);
     for (int m = 0; m < 4; ++m)
     {
         const char* knobs[] = { ParamID::gain, ParamID::bass, ParamID::mid, ParamID::treble, ParamID::presence, ParamID::master, ParamID::resonance };
@@ -154,6 +160,11 @@ ValvedProcessor::ValvedProcessor()
     pCab       = apvts.getRawParameterValue (ParamID::cab);
     pMicX      = apvts.getRawParameterValue (ParamID::micX);
     pMicDist   = apvts.getRawParameterValue (ParamID::micDist);
+    pMic         = apvts.getRawParameterValue (ParamID::mic);
+    pMicAngle    = apvts.getRawParameterValue (ParamID::micAngle);
+    pMicBassCut  = apvts.getRawParameterValue (ParamID::micBassCut);
+    pMicPresence = apvts.getRawParameterValue (ParamID::micPresence);
+    pMd421Bass   = apvts.getRawParameterValue (ParamID::md421Bass);
     pOutput    = apvts.getRawParameterValue (ParamID::output);
     pChorusRate  = apvts.getRawParameterValue (ParamID::chorusRate);
     pChorusDepth = apvts.getRawParameterValue (ParamID::chorusDepth);
@@ -202,7 +213,8 @@ void ValvedProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     gateDelay.assign (1 << 13, 1.0f); gateDelayW = 0;
     amp.prepare (sampleRate, samplesPerBlock);
     neuralAmp.prepare (sampleRate, samplesPerBlock);
-    lastNeural = pNeural->load() > 0.5f;
+    schematicAmp.prepare (sampleRate, samplesPerBlock);
+    lastEngine = activeEngine();
     chorus.prepare (sampleRate);
     for (auto& pd : pedals) pd.prepare (sampleRate, samplesPerBlock);
     compressor.prepare (sampleRate, samplesPerBlock);
@@ -245,10 +257,19 @@ void ValvedProcessor::refreshCab (bool force)
         return;
     }
 
-    if (force || type != lastCab || std::abs (mx - lastMicX) > 0.002f || std::abs (md - lastMicDist) > 0.002f)
+    vlv::mics::Settings ms;
+    ms.model = (int) pMic->load();
+    ms.distance = md;
+    ms.angle = pMicAngle->load();
+    ms.bassCut = pMicBassCut->load() > 0.5f;
+    ms.presence = pMicPresence->load() > 0.5f;
+    ms.md421Bass = (int) pMd421Bass->load();
+    if (force || type != lastCab || std::abs (mx - lastMicX) > 0.002f || std::abs (md - lastMicDist) > 0.002f
+        || ms.model != lastMic || std::abs (ms.angle - lastMicAngle) > 0.5f || ms.bassCut != lastBassCut || ms.presence != lastPresence || ms.md421Bass != lastMd421Bass)
     {
-        cab.loadBuiltIn (type, mx, md);
+        cab.loadBuiltIn (type, mx, ms);
         lastCab = type; lastMicX = mx; lastMicDist = md;
+        lastMic = ms.model; lastMicAngle = ms.angle; lastBassCut = ms.bassCut; lastPresence = ms.presence; lastMd421Bass = ms.md421Bass;
     }
 }
 
@@ -257,7 +278,7 @@ void ValvedProcessor::timerCallback()
     if (prepared) refreshCab (false);
     // Informa à DAW o atraso do transpose (compensação automática)
     int lat = shifter.getSemitones() != 0 ? shifter.getLatencySamples() : 0;
-    if (pNeural->load() > 0.5f) lat += neuralAmp.getLatencySamples();
+    if (activeEngine() == EngineNeural) lat += neuralAmp.getLatencySamples();
     if (lat != getLatencySamples()) setLatencySamples (lat);
 }
 
@@ -356,17 +377,24 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     st.gain = knobVal (0); st.bass = knobVal (1); st.mid = knobVal (2); st.treble = knobVal (3);
     st.presence = knobVal (4); st.master = knobVal (5); st.resonance = knobVal (6);
     chorus.setControls (pChorusDepth->load() / 10.0f, pChorusRate->load() / 10.0f);
-    const bool useNeural = pNeural->load() > 0.5f;
-    if (useNeural != lastNeural)
+    const int eng = activeEngine();
+    if (eng != lastEngine)
     {
         // troca de motor: começa do zero para não estalar com estado antigo
-        if (useNeural) neuralAmp.reset(); else amp.reset();
-        lastNeural = useNeural;
+        if (eng == EngineNeural) neuralAmp.reset();
+        else if (eng == EngineSchematic) schematicAmp.reset();
+        else amp.reset();
+        lastEngine = eng;
     }
-    if (useNeural)
+    if (eng == EngineNeural)
     {
         neuralAmp.setParameters (st.model, st.gain, st.bass, st.mid, st.treble, st.presence, st.master, st.resonance);
         neuralAmp.process (m, n);
+    }
+    else if (eng == EngineSchematic)
+    {
+        schematicAmp.setKnobs (st.gain, st.bass, st.mid, st.treble, st.presence, st.master);
+        schematicAmp.process (m, n);
     }
     else
     {

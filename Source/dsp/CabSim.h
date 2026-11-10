@@ -13,10 +13,14 @@ inline juce::StringArray getCabNames()
     return { "Vintage", "Greener", "Twelve", "User IR" };
 }
 
+inline juce::StringArray getMicNames()
+{
+    return { "SM57", "SM7B", "MD421" };
+}
+
 // micX: 0 = centro do cone (brilhante) .. 1 = borda (escuro)
-// micDist: 0 = colado no alto-falante (mais graves) .. 1 = afastado (mais ambiente)
-// Na posição padrão do microfone (0,25 / 0,1) a resposta é exatamente a da ficha técnica.
-inline juce::AudioBuffer<float> makeCabIR (int type, float micX, float micDist, double fs)
+// mic: modelo do microfone, distância (0 = encostado na tela .. 1 = 30 cm), ângulo e chaves
+inline juce::AudioBuffer<float> makeCabIR (int type, float micX, const mics::Settings& mic, double fs)
 {
     const int n = (int) (fs * 0.12);
     juce::AudioBuffer<float> ir (1, n);
@@ -26,7 +30,8 @@ inline juce::AudioBuffer<float> makeCabIR (int type, float micX, float micDist, 
     const int model = type == Cab4x12Greener ? speakers::Greenback
                     : type == Cab4x12Twelve  ? speakers::G12T75
                                              : speakers::Vintage30;
-    auto v = speakers::makeIR (model, fs, n, micX, micDist);
+    auto v = speakers::makeIR (model, fs, n, micX, mic);
+    const float micDist = mic.distance;
     for (int i = 0; i < n; ++i) d[i] = v[(size_t) i];
 
     // reflexões da sala só quando o microfone se afasta da posição padrão
@@ -60,14 +65,14 @@ public:
 
     void reset() { conv.reset(); }
 
-    void loadBuiltIn (int type, float micX, float micDist)
+    void loadBuiltIn (int type, float micX, const mics::Settings& mic)
     {
-        auto ir = makeCabIR (type, micX, micDist, sampleRate);
+        auto ir = makeCabIR (type, micX, mic, sampleRate);
         // Volume absoluto: mantém a diferença de sensibilidade entre os falantes (100 / 98 / 97 dB)
-        // e a mudança de volume ao mover o microfone. Referência: V30 com o mic na posição padrão.
+        // e dos microfones (SM57 -56 / SM7B -59 / MD421 -54 dBV/Pa). Referência: V30 + SM57 na posição padrão.
         if (refScaleRate != sampleRate)
         {
-            auto ref = makeCabIR (Cab4x12Vintage, 0.25f, 0.1f, sampleRate);
+            auto ref = makeCabIR (Cab4x12Vintage, 0.25f, mics::Settings {}, sampleRate);
             const float* r = ref.getReadPointer (0);
             double e = 0.0;
             for (int i = 0; i < ref.getNumSamples(); ++i) e += (double) r[i] * r[i];

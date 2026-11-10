@@ -10,6 +10,7 @@
 #include <cmath>
 #include <complex>
 #include <algorithm>
+#include "CabMics.h"
 
 namespace vlv
 {
@@ -166,7 +167,6 @@ inline float curveDb (int model, double f)
     return (float) (table[i][1] + t * (table[i + 1][1] - table[i][1]));
 }
 
-// Posição do microfone (só altera a curva quando sai da posição padrão: centro 0,25 / distância 0,1)
 inline double smoothStepLog (double f, double f0, double f1)   // 0 em f0 .. 1 em f1 (escala log)
 {
     double t = (std::log (f) - std::log (f0)) / (std::log (f1) - std::log (f0));
@@ -174,14 +174,13 @@ inline double smoothStepLog (double f, double f0, double f1)   // 0 em f0 .. 1 e
     return t * t * (3.0 - 2.0 * t);
 }
 
-inline double micDb (double f, double micX, double micDist)
+// Posição do microfone no cone (0 = centro .. 1 = borda): a borda do cone irradia menos agudos
+// e mais "corpo". Relativo à posição padrão (0,25), onde a curva é a da ficha técnica.
+inline double conePositionDb (double f, double micX)
 {
-    double db = 0.0;
-    db += -12.0 * micX * smoothStepLog (f, 1500.0, 7000.0);                       // borda do cone: menos agudos
+    double db = -12.0 * micX * smoothStepLog (f, 1500.0, 7000.0);
     const double oct = std::log2 (f / 320.0);
-    db += 2.5 * micX * std::exp (-oct * oct * 2.0);                                // borda: mais corpo
-    db += 5.0 * (1.0 - micDist) * (1.0 - smoothStepLog (f, 120.0, 400.0));        // efeito de proximidade
-    db += -4.0 * micDist * smoothStepLog (f, 3000.0, 10000.0);                     // longe: perde brilho
+    db += 2.5 * micX * std::exp (-oct * oct * 2.0);
     return db;
 }
 
@@ -214,16 +213,17 @@ inline void fft (std::vector<std::complex<double>>& a, bool inverse)
 }
 
 // IR de fase mínima com ganho absoluto: 100 dB SPL = ganho 1,0
-inline std::vector<float> makeIR (int model, double fs, int length, double micX, double micDist)
+inline std::vector<float> makeIR (int model, double fs, int length, double micX, const mics::Settings& mic)
 {
     size_t N = 1;
     while (N < (size_t) length * 4) N <<= 1;
     std::vector<std::complex<double>> spec (N);
-    const double refX = 0.25, refD = 0.1;
+    const double refX = 0.25;
     for (size_t k = 0; k <= N / 2; ++k)
     {
         const double f = std::max (1.0, (double) k * fs / (double) N);
-        double db = curveDb (model, f) - 100.0 + micDb (f, micX, micDist) - micDb (f, refX, refD);
+        double db = curveDb (model, f) - 100.0 + conePositionDb (f, micX) - conePositionDb (f, refX)
+                  + mics::responseDb (mic, f);
         if (f > 20000.0) db -= 24.0 * std::log2 (f / 20000.0);    // acima do gráfico: cai 24 dB/oitava
         const double lnMag = db * std::log (10.0) / 20.0;
         spec[k] = lnMag;
