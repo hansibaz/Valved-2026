@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -40,3 +43,13 @@ jobs:
         with:
           name: Valved-Windows
           path: Valved-Windows.zip
+
+      - name: Publicar como release (download direto)
+        if: github.ref != 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "build-${{ github.ref_name }}"
+          gh release delete $tag --yes --cleanup-tag 2>$null
+          gh release create $tag Valved-Windows.zip --target ${{ github.sha }} --prerelease --title "Valved ${{ github.ref_name }} (teste)" --notes "Build automatico do ramo ${{ github.ref_name }}"
