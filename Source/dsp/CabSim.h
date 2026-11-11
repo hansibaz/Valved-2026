@@ -70,14 +70,16 @@ public:
         auto ir = makeCabIR (type, micX, mic, sampleRate);
         // Volume absoluto: mantém a diferença de sensibilidade entre os falantes (100 / 98 / 97 dB)
         // e dos microfones (SM57 -56 / SM7B -59 / MD421 -54 dBV/Pa). Referência: V30 + SM57 na posição padrão.
-        if (refScaleRate != sampleRate)
+        // A referência é sempre calculada a 48 kHz: o IR tem a mesma resposta em qualquer taxa,
+        // então a mesma escala vale para todas (senão em 96 kHz o volume subia 3 dB).
+        if (refScaleRate <= 0.0)
         {
-            auto ref = makeCabIR (Cab4x12Vintage, 0.25f, mics::Settings {}, sampleRate);
+            auto ref = makeCabIR (Cab4x12Vintage, 0.25f, mics::Settings {}, 48000.0);
             const float* r = ref.getReadPointer (0);
             double e = 0.0;
             for (int i = 0; i < ref.getNumSamples(); ++i) e += (double) r[i] * r[i];
             refScale = e > 1e-12 ? (float) (0.125 / std::sqrt (e)) : 1.0f;
-            refScaleRate = sampleRate;
+            refScaleRate = 48000.0;
         }
         ir.applyGain (refScale);
         conv.loadImpulseResponse (std::move (ir), sampleRate,

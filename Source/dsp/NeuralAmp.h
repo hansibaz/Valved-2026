@@ -309,6 +309,7 @@ public:
         fifoR = 0;
         fifoW = resampling ? prefill() : 0;
         smoothed = false;
+        env = 0.0f; inScale = 1.0f;
         outGain = targetGain;
     }
 
@@ -353,9 +354,8 @@ public:
                 fade = std::min (1.0f, gain / 0.5f);
                 break;
         }
-        if (! smoothed) { for (int i = 0; i < 8; ++i) knob[i] = k[i]; smoothed = true; }
-        else for (int i = 0; i < 8; ++i) knob[i] += 0.35f * (k[i] - knob[i]);   // suaviza por bloco
-        nets[model].setKnobs (knob);
+        for (int i = 0; i < 8; ++i) kTarget[i] = k[i];
+        userGain = std::clamp (gain, 0.0f, 10.0f);
         targetGain = std::pow (10.0f, trimDb[model] / 20.0f) * fade * post;
     }
 
@@ -370,14 +370,47 @@ public:
     }
 
     // Nivelamento de volume entre os amps (dB), medido com o sinal de treino e knobs no meio
-    static constexpr float trimDb[4] = { 1.4f, 6.4f, -0.7f, -4.6f };   // = nível do motor de circuito (RMS, sinal de treino)
+    static constexpr float trimDb[4] = { -4.1f, 6.4f, -0.7f, -4.6f };   // Clean 120 baixado 5,5 dB (estava bem mais alto que os outros)   // = nível do motor de circuito (RMS, sinal de treino)
 
 private:
     int prefill() const { return nn::Resampler::HW + (int) std::ceil (nn::Resampler::HW * fs / 48000.0) + 4; }
 
+    // ---- Margem de entrada ----
+    // Os modelos só aprenderam os amps com sinais até ~0 dBFS (o nível da gravação). Um pedal
+    // empurrando o amp passa disso. No amp real, o sinal mais forte antes do potenciômetro de
+    // ganho equivale a girar o ganho para cima (a 1ª válvula ainda está linear). Então, quando o
+    // pico passa da margem, o sinal é reduzido para dentro da faixa aprendida e a diferença é
+    // somada no knob de ganho (curva log do pot). Se o ganho já está no 10, o resto fica no sinal.
+    static constexpr float headroom = 0.8f;
+    static float potLog (float knob) { return (std::pow (10.0f, knob / 5.0f) - 1.0f) / 99.0f; }   // fração do pot A
+    static float potLogInv (float frac) { return 5.0f * std::log10 (99.0f * frac + 1.0f); }
+
     void processChunk (float* data, int n)
     {
         auto& net = nets[model];
+        {
+            float pk = 0.0f;
+            for (int i = 0; i < n; ++i) pk = std::max (pk, std::abs (data[i]));
+            const float rel = std::exp (-(float) n / (float) (1.5 * fs));      // solta em ~1,5 s
+            env = pk > env ? pk : std::max (pk, env * rel);
+            float gEff = userGain, scale = 1.0f;
+            if (env > headroom && userGain > 0.0f)
+            {
+                const float t = potLog (userGain);
+                const float t2 = std::min (1.0f, t * env / headroom);
+                gEff = potLogInv (t2);
+                scale = t / t2;                                                 // o que foi para o knob sai do sinal
+            }
+            float k[8];
+            for (int i = 0; i < 8; ++i) k[i] = kTarget[i];
+            k[0] = std::clamp (model == 0 ? std::max (gEff, 1.0f) : gEff, 0.0f, 10.0f) / 10.0f - 0.5f;
+            if (! smoothed) { for (int i = 0; i < 8; ++i) knob[i] = k[i]; inScale = scale; smoothed = true; }
+            else for (int i = 0; i < 8; ++i) knob[i] += 0.35f * (k[i] - knob[i]);
+            net.setKnobs (knob);
+            const float st = (scale - inScale) / (float) n;
+            for (int i = 0; i < n; ++i) { inScale += st; data[i] *= inScale; }
+            inScale = scale;
+        }
         if (! resampling)
         {
             net.process (data, data, n);
@@ -407,7 +440,8 @@ private:
     double fs = 48000;
     bool resampling = false, smoothed = false;
     int model = 1;
-    float knob[8] {};
+    float knob[8] {}, kTarget[8] {};
+    float userGain = 5.0f, env = 0.0f, inScale = 1.0f;
     float outGain = 1.0f, targetGain = 1.0f;
 };
 } // namespace vlv

@@ -91,13 +91,11 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
         addAndMakeVisible (b);
     }
 
-    // Motor do amp: CIRCUIT (primeira versão), NEURAL (capturas dos amps reais) e
-    // SCHEMATIC (simulação do esquema eletrônico; por enquanto só o Brit80 / JCM800 2203)
+    // Motor do amp: CIRCUIT (primeira versão) e NEURAL (capturas dos amps reais)
     {
-        const juce::StringArray en { "CIRCUIT", "NEURAL", "SCHEMATIC" };
+        const juce::StringArray en { "CIRCUIT", "NEURAL" };
         const juce::StringArray tips { "First version: circuit model",
-                                       "Neural: captures of the real amps",
-                                       "Schematic: component-level simulation of the amp schematic (Brit80 only for now)" };
+                                       "Neural: captures of the real amps" };
         for (int i = 0; i < en.size(); ++i)
         {
             auto* b = engineButtons.add (new juce::TextButton (en[i]));
@@ -168,8 +166,6 @@ void ValvedEditor::timerCallback()
         const int eng = (int) proc.apvts.getRawParameterValue (ParamID::engine)->load();
         for (int i = 0; i < engineButtons.size(); ++i)
             engineButtons[i]->setToggleState (i == eng, juce::dontSendNotification);
-        // Schematic só existe no Brit80: nos outros amps o botão fica apagado (toca o circuito)
-        if (engineButtons.size() > 2) engineButtons[2]->setAlpha (ampIdx == 1 ? 1.0f : 0.35f);
     }
     head.setModel (ampIdx);
     head.refreshState();
@@ -202,7 +198,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.13", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.14", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
 
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawText ("IN", inMeter.getBounds().translated (0, inMeter.getHeight() + 2).withHeight (12).expanded (8, 0), juce::Justification::centred);
@@ -245,8 +241,8 @@ void ValvedEditor::resized()
 
     // Página AMP
     auto m = mainArea;
-    // amps (4 x 130) + espaço + motores (3 x 104)
-    auto sel = m.removeFromTop (56).withSizeKeepingCentre (4 * 130 + 3 * 8 + 28 + 3 * 104 + 2 * 6, 34).translated (0, 6);
+    // amps (4 x 130) + espaço + motores (2 x 104)
+    auto sel = m.removeFromTop (56).withSizeKeepingCentre (4 * 130 + 3 * 8 + 28 + 2 * 104 + 6, 34).translated (0, 6);
     for (auto* b : ampButtons) { b->setBounds (sel.removeFromLeft (130)); sel.removeFromLeft (8); }
     sel.removeFromLeft (20);
     for (auto* b : engineButtons) { b->setBounds (sel.removeFromLeft (104)); sel.removeFromLeft (6); }

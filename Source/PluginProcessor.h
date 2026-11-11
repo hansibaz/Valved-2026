@@ -6,7 +6,6 @@
 #include "dsp/TransposeShifter.h"
 #include "dsp/AmpModel.h"
 #include "dsp/NeuralAmp.h"
-#include "dsp/Schematic2203.h"
 #include "dsp/CabSim.h"
 #include "dsp/Overdrive.h"
 #include "dsp/Delay.h"
@@ -28,7 +27,7 @@ namespace ParamID
     inline constexpr const char* chorusRate  = "chorusRate";
     inline constexpr const char* chorusDepth = "chorusDepth";
     inline constexpr const char* resonance = "resonance";
-    inline constexpr const char* engine    = "engine";      // motor do amp: 0 Circuit, 1 Neural, 2 Schematic
+    inline constexpr const char* engine    = "engine";      // motor do amp: 0 Circuit, 1 Neural
 
     // Cada amp guarda a própria regulagem: "a0_gain", "a1_gain", ...
     inline juce::String ampKnob (int model, const char* knob) { return "a" + juce::String (model) + "_" + knob; }
@@ -139,16 +138,10 @@ private:
     std::vector<float> gateGains, gateDelay; int gateDelayW = 0;
     vlv::AmpModel amp;
     vlv::NeuralAmp neuralAmp;
-    vlv::SchematicAmp schematicAmp;     // JCM800 2203 pelo esquema (só no Brit80)
     int lastEngine = -1;
 public:
-    enum Engine { EngineCircuit = 0, EngineNeural = 1, EngineSchematic = 2 };
-    // motor que está tocando de fato (o Schematic só existe no Brit80; nos outros cai no circuito)
-    int activeEngine() const
-    {
-        const int e = (int) pEngine->load();
-        return (e == EngineSchematic && (int) pAmp->load() != 1) ? EngineCircuit : e;
-    }
+    enum Engine { EngineCircuit = 0, EngineNeural = 1 };
+    int activeEngine() const { return (int) pEngine->load(); }
 private:
     vlv::CE1Chorus chorus;
     vlv::CabSim cab;

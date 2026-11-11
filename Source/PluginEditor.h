@@ -55,7 +55,7 @@ private:
     LevelMeter inMeter, outMeter;
 
     juce::OwnedArray<juce::TextButton> ampButtons;
-    // Motor do amp: CIRCUIT (primeira versão), NEURAL (capturas) e SCHEMATIC (esquema, só Brit80)
+    // Motor do amp: CIRCUIT (primeira versão) e NEURAL (capturas dos amps reais)
     juce::OwnedArray<juce::TextButton> engineButtons;
     AmpHead head;
     CabPage cabPage;

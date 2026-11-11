@@ -35,7 +35,7 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
     StringArray ampNames;
     for (auto* nm : vlv::ampNames()) ampNames.add (nm);
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::amp, 1 }, "Amp", ampNames, 1));
-    p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::engine, 1 }, "Amp Engine", StringArray { "Circuit", "Neural", "Schematic" }, 1));
+    p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::engine, 1 }, "Amp Engine", StringArray { "Circuit", "Neural" }, 1));
 
     // Regulagem própria de cada amp (todos começam com os knobs no meio)
     for (int m = 0; m < 4; ++m)
@@ -213,7 +213,6 @@ void ValvedProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     gateDelay.assign (1 << 13, 1.0f); gateDelayW = 0;
     amp.prepare (sampleRate, samplesPerBlock);
     neuralAmp.prepare (sampleRate, samplesPerBlock);
-    schematicAmp.prepare (sampleRate, samplesPerBlock);
     lastEngine = activeEngine();
     chorus.prepare (sampleRate);
     for (auto& pd : pedals) pd.prepare (sampleRate, samplesPerBlock);
@@ -382,7 +381,6 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     {
         // troca de motor: começa do zero para não estalar com estado antigo
         if (eng == EngineNeural) neuralAmp.reset();
-        else if (eng == EngineSchematic) schematicAmp.reset();
         else amp.reset();
         lastEngine = eng;
     }
@@ -390,11 +388,6 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     {
         neuralAmp.setParameters (st.model, st.gain, st.bass, st.mid, st.treble, st.presence, st.master, st.resonance);
         neuralAmp.process (m, n);
-    }
-    else if (eng == EngineSchematic)
-    {
-        schematicAmp.setKnobs (st.gain, st.bass, st.mid, st.treble, st.presence, st.master);
-        schematicAmp.process (m, n);
     }
     else
     {

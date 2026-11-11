@@ -26,6 +26,19 @@ constexpr Diode D1N34A   { 2.0e-7,  1.30 };    // germânio 1N34A (Klon), Vf ~0,
 
 inline double audioTaper (double x) { x = juce::jlimit (0.0, 1.0, x); return (std::pow (10.0, 2.0 * x) - 1.0) / 99.0; }
 
+// Pot "A" (log) de carbono real, como nos pedais: dois trechos lineares, 15% da resistência
+// no meio do curso (a curva exponencial teórica dá só 9% e deixa o pedal fraco no meio)
+inline double aTaper (double x)
+{
+    x = juce::jlimit (0.0, 1.0, x);
+    return x <= 0.5 ? 0.3 * x : 0.15 + 1.7 * (x - 0.5);
+}
+
+// Nível elétrico da guitarra: 1,0 no plugin (0 dBFS da interface) = 0,5 V de pico no cabo
+// (com o ganho da interface ajustado para a guitarra quase encostar em 0 dBFS).
+// Os circuitos dos pedais trabalham em volts reais; a saída volta para a mesma escala.
+constexpr float guitarVoltsPerUnit = 0.5f;
+
 // ------------------------------------------------------------------------------------
 // Circuito linear genérico (MNA). Nó 0 = terra (referência AC / meia-fonte).
 // ------------------------------------------------------------------------------------
@@ -336,11 +349,13 @@ public:
         if (dirty) { dirty = false; updateCircuit(); }
         if ((int) dry.size() < n) dry.resize ((size_t) n);
         std::copy (data, data + n, dry.begin());
+        for (int i = 0; i < n; ++i) data[i] *= guitarVoltsPerUnit;       // plugin -> volts no cabo
         float* ch[1] = { data };
         juce::dsp::AudioBlock<float> block (ch, 1, (size_t) n);
         auto up = os->processSamplesUp (block);
         processOS (up.getChannelPointer (0), (int) up.getNumSamples());
         os->processSamplesDown (block);
+        for (int i = 0; i < n; ++i) data[i] *= 1.0f / guitarVoltsPerUnit; // volts -> plugin
         const float target = enabled ? 1.0f : 0.0f, step = 1.0f / (0.01f * (float) fs);
         for (int i = 0; i < n; ++i)
         {
@@ -406,7 +421,7 @@ protected:
     void resetCircuit() override { inHp.reset(); cplHp.reset(); clip.reset(); tone.reset(); outHp.reset(); }
     void updateCircuit() override
     {
-        const double rf = 51e3 + 500e3 * audioTaper (pDrive / 10.0);
+        const double rf = 51e3 + 500e3 * aTaper (pDrive / 10.0);
         clip.set (4.7e3, 47e-9, rf, 51e-12, 3.4);
         const double t = juce::jlimit (0.002, 0.998, pTone / 10.0);
         tone.setR (potA, 20e3 * t);
@@ -414,7 +429,7 @@ protected:
         // Saída: divisor do resistor série com a carga (entrada de ~1M do amp)
         const double rs = ts9 ? 470.0 : 100.0, rl = ts9 ? 100e3 : 10e3;
         const double load = 1e6 * rl / (1e6 + rl);
-        outGain = (float) (audioTaper (pLevel / 10.0) * load / (load + rs));
+        outGain = (float) (aTaper (pLevel / 10.0) * load / (load + rs));
     }
     void processOS (float* x, int n) override
     {
@@ -474,11 +489,11 @@ protected:
     void resetCircuit() override { inHp.reset(); cplHp.reset(); clip.reset(); tone.reset(); outHp.reset(); }
     void updateCircuit() override
     {
-        clip.set (4.7e3, 47e-9, 33e3 + 1e6 * audioTaper (pDrive / 10.0), 47e-12, 3.4);
+        clip.set (4.7e3, 47e-9, 33e3 + 1e6 * aTaper (pDrive / 10.0), 47e-12, 3.4);
         const double t = juce::jlimit (0.002, 0.998, pTone / 10.0);
         tone.setR (potA, 20e3 * t);
         tone.setR (potB, 20e3 * (1.0 - t));
-        outGain = (float) audioTaper (pLevel / 10.0);
+        outGain = (float) aTaper (pLevel / 10.0);
     }
     void processOS (float* x, int n) override
     {
@@ -567,7 +582,7 @@ protected:
         const double Ghf = (10e3 * tr + 4.7e3) / (1.8e3 + 10e3 * (1.0 - tr));
         const double tau = 100e3 * 3.9e-9;
         treble.set (1.0, Ghf * tau, 1.0, tau, osFs);
-        outGain = (float) audioTaper (pOut / 10.0);
+        outGain = (float) aTaper (pOut / 10.0);
     }
     void processOS (float* x, int n) override
     {
@@ -654,7 +669,7 @@ protected:
         st2.set (10e3 + 100e3 * (1.0 - a), 1e-6, 220e3, 100e-12, 3.6);
         tone.setR (toneIdx, 25e3 * (pTone / 10.0) + 50.0);
         tone.setR (presIdx, 50e3 * (1.0 - audioTaper (0.25)) + 100.0);   // presence interno em ~25%
-        outGain = (float) audioTaper (pVol / 10.0) * 1.4f;
+        outGain = (float) aTaper (pVol / 10.0) * 1.4f;
     }
     void processOS (float* x, int n) override
     {

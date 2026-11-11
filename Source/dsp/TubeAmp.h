@@ -606,7 +606,7 @@ inline CircuitSpec jcClean()
     c.postEq[3].q = 1.60703; c.inputScale = 1; c.ssClip = 2.26742;
     c.gainTaperDb = 0; c.masterTaperDb = 0; c.power.piHeadroom = 0.0857515;   // Volume linear: no 5 fica só 6 dB abaixo do 10 (medições foram com Volume 10)
     c.power.powerKnee = 1.91704; c.power.asym = 0.00663047; c.power.sag = 0;
-    c.outTrimDb = 0;
+    c.outTrimDb = -9.0;   // o Clean 120 saía ~9 dB mais alto que os outros amps (picos passavam de 0 dBFS)
     return c;
 }
 
