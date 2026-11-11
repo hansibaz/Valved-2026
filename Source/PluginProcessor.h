@@ -6,6 +6,7 @@
 #include "dsp/TransposeShifter.h"
 #include "dsp/AmpModel.h"
 #include "dsp/NeuralAmp.h"
+#include "dsp/LevelMatch.h"
 #include "dsp/CabSim.h"
 #include "dsp/Overdrive.h"
 #include "dsp/Delay.h"
@@ -138,6 +139,8 @@ private:
     std::vector<float> gateGains, gateDelay; int gateDelayW = 0;
     vlv::AmpModel amp;
     vlv::NeuralAmp neuralAmp;
+    juce::SmoothedValue<float> levelMatch { 1.0f };   // volume igual entre amps + mesma curva do Master
+    vlv::OutputLimiter limiter;                       // teto de -1 dBFS na saída
     int lastEngine = -1;
 public:
     enum Engine { EngineCircuit = 0, EngineNeural = 1 };

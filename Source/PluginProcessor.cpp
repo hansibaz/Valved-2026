@@ -226,6 +226,8 @@ void ValvedProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 
     inGain.reset (sampleRate, 0.03);
     outGain.reset (sampleRate, 0.03);
+    levelMatch.reset (sampleRate, 0.05);
+    limiter.prepare (sampleRate);
     inGain.setCurrentAndTargetValue (vlv::dbToGain (pInput->load()));
     outGain.setCurrentAndTargetValue (vlv::dbToGain (pOutput->load()));
     chorusMix = pChorus->load() > 0.5f ? 1.0f : 0.0f;
@@ -394,6 +396,9 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         amp.setParameters (st);
         amp.process (m, n);
     }
+    // Volume igual para todos os amps (e o Master com a mesma curva em todos)
+    levelMatch.setTargetValue (vlv::LevelMatch::gain (eng, st.model, st.master));
+    for (int i = 0; i < n; ++i) m[i] *= levelMatch.getNextValue();
     for (int i = 0; i < n; ++i) m[i] *= gateGains[(size_t) i];
 
     // 6) Divide em estéreo com o chorus (lado esquerdo seco, direito com chorus)
@@ -453,6 +458,14 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         L[i] *= g;
         outPeak = juce::jmax (outPeak, std::abs (L[i]));
         if (R != nullptr) { R[i] *= g; outPeak = juce::jmax (outPeak, std::abs (R[i])); }
+    }
+    // 10) Limitador: o mesmo teto (-1 dBFS) para todos, a saída nunca clipa
+    limiter.process (L, R, n);
+    outPeak = 0;
+    for (int i = 0; i < n; ++i)
+    {
+        outPeak = juce::jmax (outPeak, std::abs (L[i]));
+        if (R != nullptr) outPeak = juce::jmax (outPeak, std::abs (R[i]));
     }
     outputMeter = juce::jmax (outPeak, outputMeter.load() * 0.8f);
 }

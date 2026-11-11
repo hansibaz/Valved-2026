@@ -198,7 +198,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.14", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.15", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
 
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawText ("IN", inMeter.getBounds().translated (0, inMeter.getHeight() + 2).withHeight (12).expanded (8, 0), juce::Justification::centred);
