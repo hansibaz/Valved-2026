@@ -24,10 +24,10 @@ public:
         fs = sampleRate;
         buf.assign ((size_t) size, 0.0f);
         w = 0; readPos = 0; fromPos = 0; xfLeft = 0;
-        corrLen   = (int) (0.005 * fs);   // janela de comparação (5 ms)
-        search    = (int) (0.014 * fs);   // procura em ~1 ciclo do Mi grave (12,1 ms)
-        xfLen     = (int) (0.007 * fs);   // crossfade entre trechos alinhados
-        minJump   = (int) (0.002 * fs);
+        corrLen   = (int) (0.010 * fs);   // janela de comparação (10 ms)
+        search    = (int) (0.026 * fs);   // procura em ~2 ciclos do Mi grave
+        xfLen     = (int) (0.012 * fs);   // crossfade entre trechos alinhados
+        minJump   = (int) (0.004 * fs);
         wet = semis != 0 ? 1.0f : 0.0f;
         wetCoef = (float) std::exp (-1.0 / (0.010 * fs));
         resetPointer();
