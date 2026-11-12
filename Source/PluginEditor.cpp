@@ -50,7 +50,7 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
       transpose (p.apvts, ParamID::transpose, "TRANSPOSE"),
       output (p.apvts, ParamID::output, "OUTPUT"),
       head (p.apvts),
-      cabPage (p), pedalsPage (p), fxPage (p)
+      cabPage (p), pedalsPage (p), fxPage (p), tunerView (p)
 {
     setLookAndFeel (&look);
 
@@ -71,6 +71,16 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
     tuningLabel.setColour (juce::Label::textColourId, accent);
     tuningLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (tuningLabel);
+
+    tunerBtn.setClickingTogglesState (true);
+    tunerBtn.setTooltip ("Tuner");
+    tunerBtn.onClick = [this]
+    {
+        proc.tunerActive = tunerBtn.getToggleState();
+        tunerView.setVisible (tunerBtn.getToggleState());
+        if (tunerBtn.getToggleState()) tunerView.toFront (false);
+    };
+    addAndMakeVisible (tunerBtn);
 
     addAndMakeVisible (inMeter);
     addAndMakeVisible (outMeter);
@@ -117,6 +127,9 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
     addChildComponent (cabPage);
     addChildComponent (pedalsPage);
     addChildComponent (fxPage);
+    addChildComponent (tunerView);
+    tunerBtn.setToggleState (proc.tunerActive.load(), juce::dontSendNotification);
+    tunerView.setVisible (proc.tunerActive.load());
 
     setSize (1100, 720);
     showPage (PageAmp);
@@ -127,6 +140,7 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
 ValvedEditor::~ValvedEditor()
 {
     stopTimer();
+    proc.tunerActive = false;   // fechou a janela: o afinador desliga (e o som volta)
     setLookAndFeel (nullptr);
 }
 
@@ -143,6 +157,7 @@ void ValvedEditor::showPage (int newPage)
     cabPage.setVisible (page == PageCab);
     pedalsPage.setVisible (page == PagePedals);
     fxPage.setVisible (page == PageFx);
+    if (tunerView.isVisible()) tunerView.toFront (false);
     repaint();
 }
 
@@ -179,6 +194,7 @@ void ValvedEditor::timerCallback()
     if (page == PageCab) cabPage.refresh();
     if (page == PagePedals) pedalsPage.refresh();
     if (page == PageFx) fxPage.refresh();
+    if (tunerView.isVisible()) tunerView.tick();
     inMeter.setLevel (proc.getInputLevel());
     outMeter.setLevel (proc.getOutputLevel());
 }
@@ -198,7 +214,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.16", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.17", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
 
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawText ("IN", inMeter.getBounds().translated (0, inMeter.getHeight() + 2).withHeight (12).expanded (8, 0), juce::Justification::centred);
@@ -238,6 +254,8 @@ void ValvedEditor::resized()
     outMeter.setBounds (meters.removeFromLeft (14));
     row2.removeFromRight (12);
     output.setBounds (row2.removeFromRight (92));
+    row2.removeFromRight (24);
+    tunerBtn.setBounds (row2.removeFromRight (104).withSizeKeepingCentre (104, 34).translated (0, 4));
 
     // Página AMP
     auto m = mainArea;
@@ -252,4 +270,5 @@ void ValvedEditor::resized()
     cabPage.setBounds (mainArea.withTrimmedTop (16));
     pedalsPage.setBounds (mainArea);
     fxPage.setBounds (mainArea);
+    tunerView.setBounds (mainArea);
 }

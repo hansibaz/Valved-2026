@@ -228,6 +228,8 @@ void ValvedProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     outGain.reset (sampleRate, 0.03);
     levelMatch.reset (sampleRate, 0.05);
     limiter.prepare (sampleRate);
+    tunerFeed.sampleRate = sampleRate;
+    tunerGain.reset (sampleRate, 0.02);
     inGain.setCurrentAndTargetValue (vlv::dbToGain (pInput->load()));
     outGain.setCurrentAndTargetValue (vlv::dbToGain (pOutput->load()));
     chorusMix = pChorus->load() > 0.5f ? 1.0f : 0.0f;
@@ -342,6 +344,7 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         inPeak = juce::jmax (inPeak, std::abs (m[i]));
     }
     inputMeter = juce::jmax (inPeak, inputMeter.load() * 0.8f);
+    if (tunerActive.load()) tunerFeed.push (m, n);   // afinador: guitarra limpa, antes de tudo
 
     // 3) Noise gate: detecta na guitarra limpa, mas só atenua depois do amp (estilo "Decimator"),
     //    assim o chiado amplificado pelos drives/amp some no silêncio sem mexer no timbre.
@@ -461,6 +464,15 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     }
     // 10) Limitador: o mesmo teto (-1 dBFS) para todos, a saída nunca clipa
     limiter.process (L, R, n);
+    // 11) Mudo do afinador (afinar em silêncio)
+    tunerGain.setTargetValue (tunerActive.load() && tunerMute.load() ? 0.0f : 1.0f);
+    if (tunerGain.isSmoothing() || tunerGain.getTargetValue() < 0.5f)
+        for (int i = 0; i < n; ++i)
+        {
+            const float g = tunerGain.getNextValue();
+            L[i] *= g;
+            if (R != nullptr) R[i] *= g;
+        }
     outPeak = 0;
     for (int i = 0; i < n; ++i)
     {
@@ -477,6 +489,8 @@ void ValvedProcessor::getStateInformation (juce::MemoryBlock& destData)
         const juce::ScopedLock sl (irLock);
         state.setProperty ("userIR", userIRFile.getFullPathName(), nullptr);
     }
+    state.setProperty ("tunerRef", tunerRef.load(), nullptr);
+    state.setProperty ("tunerMute", tunerMute.load(), nullptr);
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
@@ -489,6 +503,8 @@ void ValvedProcessor::setStateInformation (const void* data, int sizeInBytes)
         if (tree.isValid() && tree.hasType (apvts.state.getType()))
         {
             const juce::String irPath = tree.getProperty ("userIR").toString();
+            tunerRef = juce::jlimit (430.0, 450.0, (double) tree.getProperty ("tunerRef", 440.0));
+            tunerMute = (bool) tree.getProperty ("tunerMute", true);
             apvts.replaceState (tree);
             {
                 const juce::ScopedLock sl (irLock);

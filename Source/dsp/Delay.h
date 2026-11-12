@@ -3,10 +3,17 @@
 #include <vector>
 #include "Biquad.h"
 #include "Overdrive.h"
+#include "FxCore.h"
 
 namespace vlv
 {
-// Delay estéreo multi-modos, inspirado nos delays modernos de estúdio/pedal.
+// Delay estéreo multi-modos, inspirado nos delays modernos de estúdio/pedal (v2):
+//  - leitura com interpolação cúbica (repetições moduladas sem perder agudos)
+//  - filtros de 12 dB/oitava no laço de realimentação
+//  - Tape: wow (aleatório) + flutter, saturação com pré/de-ênfase (os agudos saturam antes,
+//    como na fita), "head bump" nos graves e perda de agudos que aumenta com o AGE
+//  - Analog: BBD com filtros anti-aliasing de 4 polos cujo corte cai com o tempo de atraso
+//    (como o clock de um MN3005) e compander (o "respiro" típico dos analógicos)
 class StereoDelay
 {
 public:
@@ -52,8 +59,8 @@ public:
         std::fill (bufL.begin(), bufL.end(), 0.0f);
         std::fill (bufR.begin(), bufR.end(), 0.0f);
         w = 0; dS = -1.0;
-        for (auto* f : { &toneL, &toneR, &darkL, &darkR }) f->reset();
-        hpL.reset(); hpR.reset(); bpL.reset(); bpR.reset();
+        for (auto& c : filt) for (auto& f : c) f.reset();
+        bpL.reset(); bpR.reset(); compEnv[0] = compEnv[1] = 0.0f;
         env = envSlow = 0; swellGain = 1; duckGain = 1; revPhase = 0; lfo1 = lfo2 = 0;
         holdL = holdR = 0; holdCount = 0;
         inputGain = 0; wetGain = 0; dryGain = 1; idle = true; quietSamples = 0;
@@ -108,10 +115,10 @@ public:
             lfo1 += 0.55 / fs; if (lfo1 >= 1.0) lfo1 -= 1.0;
             lfo2 += 6.3 / fs;  if (lfo2 >= 1.0) lfo2 -= 1.0;
             double mod = modDepth * 0.0035 * fs * std::sin (2.0 * kPi * lfo1);
-            if (type == Tape)
-                mod += p * (0.0025 * fs * std::sin (2.0 * kPi * lfo1 * 1.3) + 0.00025 * fs * std::sin (2.0 * kPi * lfo2));
+            if (type == Tape)   // wow (lento e irregular) + flutter (rápido e pequeno)
+                mod = modDepth * 0.0025 * fs * wow.next() + (0.3 + p) * (0.0018 * fs * wow2.next() + 0.00022 * fs * std::sin (2.0 * kPi * lfo2));
             if (type == Analog)
-                mod += 0.0006 * fs * std::sin (2.0 * kPi * lfo2 * 0.4);
+                mod += 0.0006 * fs * bbdWander.next();
 
             const double dL = juce::jmax (2.0, dS + mod);
             const double dR = juce::jmax (2.0, (type == Dual ? dS * dualRatio : dS) + mod * 0.9);
@@ -144,8 +151,8 @@ public:
             // Laço de realimentação com o "caráter" de cada tipo
             float fL = (type == MultiTap) ? read (bufL, dL) : yL;
             float fR = (type == MultiTap) ? fL : yR;
-            fL = colour (fL, toneL, darkL, hpL);
-            fR = colour (fR, toneR, darkR, hpR);
+            fL = colour (fL, 0);
+            fR = colour (fR, 1);
 
             float wL, wR;
             if (type == PingPong)
@@ -209,13 +216,29 @@ private:
 
         const bool saturating = (type == Tape || type == Analog);
         fb = saturating ? 1.06f * rep : 0.97f * rep;
+        if (type == Tape) fb /= std::sqrt (dbToGain (2.5f * (0.5f + p)));   // head bump: no máximo dispara nos graves, como uma fita de verdade
 
         double toneHz = 1200.0 * std::pow (12.0, (double) t);     // 1,2 kHz .. 14 kHz
-        if (type == Analog) toneHz = juce::jmin (toneHz, 4200.0 - 2500.0 * p);
-        if (type == Tape)   toneHz = juce::jmin (toneHz, 9000.0 - 6000.0 * p);
-        toneL.setCutoff (fs, toneHz); toneR.setCutoff (fs, toneHz);
-        darkL.setCutoff (fs, type == Analog ? 2600.0 : 16000.0); darkR.setCutoff (fs, type == Analog ? 2600.0 : 16000.0);
-        hpL.setCutoff (fs, type == Tape ? 140.0 : 70.0); hpR.setCutoff (fs, type == Tape ? 140.0 : 70.0);
+        if (type == Tape)   toneHz = juce::jmin (toneHz, 10000.0 - 7000.0 * p);
+        if (type == Analog)
+        {
+            // BBD de 4096 estágios: o corte acompanha o clock (cai quando o tempo aumenta)
+            const double clockNyq = 4096.0 / (2.0 * juce::jmax (0.02, s.timeMs * 0.001)) * 0.5;
+            toneHz = juce::jmin (toneHz, juce::jlimit (1500.0, 8000.0, 0.8 * clockNyq) * (1.0 - 0.5 * p));
+        }
+        for (int c = 0; c < 2; ++c)
+        {
+            Biquad* f = filt[c];
+            f[0].highpass (fs, type == Tape ? 90.0 : 60.0, 0.707);
+            f[1].highpass (fs, type == Tape ? 90.0 : 60.0, 0.707);
+            f[2].lowpass (fs, toneHz, 0.707);
+            f[3].lowpass (fs, toneHz, 0.707);
+            f[4].lowpass (fs, toneHz * 1.1, 0.6);
+            f[5].highShelf (fs, 3000.0, 6.0);                   // pré-ênfase da fita
+            f[6].highShelf (fs, 3000.0, -6.0);                  // de-ênfase
+            f[7].peak (fs, 95.0, 1.0, 2.5 * (0.5 + p));         // head bump
+        }
+        wow.setRate (fs, 0.45 + 0.6 * p); wow2.setRate (fs, 2.2); bbdWander.setRate (fs, 0.35);
 
         grit = type == Digital ? p : (type == Tape ? 0.4f + 0.6f * p : (type == Analog ? 0.5f + 0.5f * p : 0.0f));
         dualRatio = 0.25 + 0.75 * (double) p;
@@ -237,16 +260,40 @@ private:
         for (int k = 0; k < 4; ++k) { tapPos[k] = pos[pattern][k]; tapGain[k] = gn[pattern][k]; }
     }
 
-    inline float colour (float x, OnePole& tone, OnePole& dark, OnePole& hp) noexcept
+    inline float colour (float x, int ch) noexcept
     {
-        x = hp.hp (tone.lp (x));
-        if (lastType == Analog) x = dark.lp (x);
+        Biquad* f = filt[ch];
+        x = f[1].process (f[0].process (x));                    // passa-altas 12 dB/oit
+        if (lastType == Tape)
+        {
+            // pré-ênfase -> saturação da fita -> de-ênfase (agudos comprimem antes)
+            x = f[5].process (x);
+            const float drive = 1.0f + 2.5f * grit;
+            x = std::tanh (x * drive) / drive * (1.0f + 0.25f * grit);
+            x = f[6].process (x);
+            x = f[7].process (x);                               // head bump (graves)
+            x = f[2].process (x);                               // perda de agudos (AGE/TONE)
+            return x;
+        }
+        if (lastType == Analog)
+        {
+            // compander: comprime antes do BBD, expande depois (o "respiro")
+            const float a = std::abs (x);
+            compEnv[ch] = a > compEnv[ch] ? a + 0.995f * (compEnv[ch] - a) : a + 0.9995f * (compEnv[ch] - a);
+            const float cg = 1.0f / std::sqrt (std::max (compEnv[ch], 0.02f) / 0.25f);
+            x *= cg;
+            x = f[3].process (f[2].process (x));                // anti-aliasing 4 polos (clock do BBD)
+            x = std::tanh (x * 1.2f) / 1.2f;
+            x = f[4].process (x);                               // reconstrução
+            x /= cg;
+            return std::tanh (x);
+        }
+        x = f[2].process (x);                                   // TONE 12 dB/oit
         if (grit > 0.0f)
         {
             const float drive = 1.0f + 3.0f * grit;
-            x = x + (std::tanh (x * drive) / drive - x) * juce::jmin (1.0f, grit * 1.5f);
+            x = x + (std::tanh (x * drive) / drive - x) * std::min (1.0f, grit * 1.5f);
         }
-        if (lastType == Tape || lastType == Analog) x = std::tanh (x);
         return x;
     }
 
@@ -258,12 +305,17 @@ private:
 
     inline float read (const std::vector<float>& b, double delay) const noexcept
     {
+        // interpolação cúbica (Hermite): modulação limpa, sem perda de agudos
         const double pos = (double) w - delay;
         const double fl = std::floor (pos);
         const float t = (float) (pos - fl);
         const int i = (int) fl;
-        const float a = b[(size_t) (i & mask)], c = b[(size_t) ((i + 1) & mask)];
-        return a + (c - a) * t;
+        const float ym1 = b[(size_t) ((i - 1) & mask)], y0 = b[(size_t) (i & mask)];
+        const float y1 = b[(size_t) ((i + 1) & mask)], y2 = b[(size_t) ((i + 2) & mask)];
+        const float c1 = 0.5f * (y1 - ym1);
+        const float c2 = ym1 - 2.5f * y0 + 2.0f * y1 - 0.5f * y2;
+        const float c3 = 0.5f * (y2 - ym1) + 1.5f * (y0 - y1);
+        return ((c3 * t + c2) * t + c1) * t + y0;
     }
 
     // Duas cabeças de leitura andando para trás, com crossfade
@@ -294,7 +346,9 @@ private:
     float tapPos[4] {}, tapGain[4] {};
     float inputGain = 0, wetGain = 0, dryGain = 1;
     bool idle = true; int quietSamples = 0;
-    OnePole toneL, toneR, darkL, darkR, hpL, hpR;
+    Biquad filt[2][8];          // por canal: HP, HP, LP, LP, LP, pré-ênfase, de-ênfase, head bump
     Biquad bpL, bpR;
+    float compEnv[2] {};
+    fx::SmoothRandom wow { 31u }, wow2 { 47u }, bbdWander { 53u };
 };
 } // namespace vlv

@@ -11,6 +11,7 @@
 #include "dsp/Overdrive.h"
 #include "dsp/Delay.h"
 #include "dsp/Reverb.h"
+#include "dsp/Tuner.h"
 
 namespace ParamID
 {
@@ -117,6 +118,11 @@ public:
     float getGateGain() const    { return gateMeter.load(); }
     double getBpm() const        { return bpm.load(); }
 
+    // Afinador: o áudio da guitarra vai para a fila; a análise roda na interface
+    vlv::TunerFeed tunerFeed;
+    std::atomic<bool> tunerActive { false }, tunerMute { true };
+    std::atomic<double> tunerRef { 440.0 };
+
     // Divisões de tempo do delay sincronizado
     static juce::StringArray divisionNames() { return { "1/2", "1/4.", "1/4", "1/4T", "1/8.", "1/8", "1/8T", "1/16" }; }
     static double divisionBeats (int i)
@@ -141,6 +147,7 @@ private:
     vlv::NeuralAmp neuralAmp;
     juce::SmoothedValue<float> levelMatch { 1.0f };   // volume igual entre amps + mesma curva do Master
     vlv::OutputLimiter limiter;                       // teto de -1 dBFS na saída
+    juce::SmoothedValue<float> tunerGain { 1.0f };    // mudo do afinador sem estalo
     int lastEngine = -1;
 public:
     enum Engine { EngineCircuit = 0, EngineNeural = 1 };
