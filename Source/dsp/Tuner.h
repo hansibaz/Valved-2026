@@ -14,6 +14,7 @@
 #include <atomic>
 #include <cmath>
 #include <algorithm>
+#include <memory>
 
 namespace vlv
 {
@@ -21,7 +22,7 @@ namespace vlv
 class TunerFeed
 {
 public:
-    static constexpr int size = 1 << 15;
+    static constexpr int size = 1 << 16;
     void push (const float* x, int n) noexcept
     {
         int w = writePos.load (std::memory_order_relaxed);
@@ -53,11 +54,12 @@ public:
         float level = 0.0f;    // nível do sinal
     };
 
-    TunerAnalyzer() { win.assign ((size_t) W, 0.0f); data.assign ((size_t) (4 * W), 0.0f); }
+    TunerAnalyzer() { setup (48000.0); }
 
     Reading analyse (const TunerFeed& feed, double refA4)
     {
         const double fs = feed.sampleRate.load();
+        if (fs != curFs) setup (fs);
         feed.latest (win.data(), W);
 
         Reading r;
@@ -76,7 +78,7 @@ public:
         if (clarity < 0.80f) { hist.clear(); return r; }
 
         double f = fs / period;
-        if (f < 25.0 || f > 2000.0) return r;
+        if (f < minHz || f > 2000.0) return r;
 
         // mediana das últimas leituras (descarta saltos isolados) + suavização quando parada
         hist.push_back (f);
@@ -97,7 +99,23 @@ public:
     }
 
 private:
-    static constexpr int order = 13, W = 1 << order;   // 8192 amostras (~170 ms a 48 kHz): pega até o Si grave de 7 cordas
+    // Janela de ~170 ms (8192 amostras a 44,1/48 kHz, maior em 96/192 kHz): cabe mais de 3 ciclos
+    // da nota mais grave (20 Hz), então pega guitarras de 7, 8 e 9 cordas (Dó# 34,6 Hz, Si 30,9 Hz,
+    // Lá 27,5 Hz) e até afinações abaixo disso, além de baixos.
+    static constexpr double minHz = 20.0;
+    int W = 8192;
+    double curFs = 0.0;
+    std::unique_ptr<juce::dsp::FFT> bigFft;
+    void setup (double fs)
+    {
+        curFs = fs;
+        int order = 13;
+        while ((1 << order) < (int) (fs * 0.17)) ++order;
+        W = 1 << order;
+        bigFft = std::make_unique<juce::dsp::FFT> (order + 1);
+        win.assign ((size_t) W, 0.0f); data.assign ((size_t) (4 * W), 0.0f);
+        hist.clear(); smooth = 0.0;
+    }
 
     // McLeod Pitch Method
     bool mpm (const float* x, int n, double fs, double& period, float& clarity)
@@ -105,15 +123,15 @@ private:
         // autocorrelação por FFT (zero-padding para 2n)
         std::fill (data.begin(), data.end(), 0.0f);
         for (int i = 0; i < n; ++i) data[(size_t) i] = x[i];
-        bigFft.performRealOnlyForwardTransform (data.data(), true);
+        bigFft->performRealOnlyForwardTransform (data.data(), true);
         for (int k = 0; k <= n; ++k)
         {
             const float re = data[(size_t) (2 * k)], im = data[(size_t) (2 * k + 1)];
             data[(size_t) (2 * k)] = re * re + im * im; data[(size_t) (2 * k + 1)] = 0.0f;
         }
-        bigFft.performRealOnlyInverseTransform (data.data());
+        bigFft->performRealOnlyInverseTransform (data.data());
         // NSDF: n(t) = 2 r(t) / m(t),  m(t) = soma de x[j]^2 + x[j+t]^2
-        const int maxLag = std::min (n / 2, (int) (fs / 25.0));
+        const int maxLag = std::min (n / 2, (int) (fs / (minHz * 0.95)));
         const int minLag = std::max (2, (int) (fs / 2000.0));
         nsdf.assign ((size_t) maxLag, 0.0f);
         double m = 0.0; for (int i = 0; i < n; ++i) m += 2.0 * (double) x[i] * x[i];
@@ -171,7 +189,6 @@ private:
         return true;
     }
 
-    juce::dsp::FFT bigFft { order + 1 };
     std::vector<float> win, data, nsdf;
     std::vector<double> hist;
     double smooth = 0.0;
