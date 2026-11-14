@@ -358,6 +358,7 @@ void SpeakerView::renderCab()
         drawSpeaker (g, c, R, 11);
         drawSpeaker (g, c.translated (R * spacing, 0.0f), R, 23);
         drawSpeaker (g, c.translated (0.0f, R * spacing), R, 37);
+        drawSpeaker (g, c.translated (R * spacing, R * spacing), R, 41);
 
         // Tela (grill cloth) preta com trama prateada, semitransparente: os falantes aparecem por trás
         g.setColour (juce::Colours::black.withAlpha (0.38f));
@@ -377,17 +378,17 @@ void SpeakerView::renderCab()
         g.fillRect (frameT, frameT, W, 16.0f);
         g.fillRect (frameT, frameT, 16.0f, H);
 
-        // Logo
+        // Logo grande, centralizado na largura visível da caixa, entre o falante de cima e o de baixo
         const juce::Colour cream (0xffeee4c8);
-        const float lx = c.x + R * 1.05f, ly = c.y + R * 1.06f;
-        auto logoR = juce::Rectangle<float> (lx, ly, W - lx - 8.0f, H - ly - 6.0f);
+        const float cyLogo = c.y + R * spacing * 0.5f;
+        auto logoR = juce::Rectangle<float> (frameT, cyLogo - R * 0.42f, W - frameT, R * 0.84f);
         {
             auto f = ui::Fonts::logo (100.0f);
             const float wAt100 = f.getStringWidthFloat ("Valved") * 1.08f;
-            g.setFont (ui::Fonts::logo (juce::jmin (logoR.getHeight() * 0.9f, 60.0f, 100.0f * logoR.getWidth() / wAt100)));
+            g.setFont (ui::Fonts::logo (juce::jmin (logoR.getHeight(), 100.0f * logoR.getWidth() * 0.6f / wAt100)));
         }
-        g.setColour (juce::Colours::black.withAlpha (0.55f));
-        g.drawText ("Valved", logoR.translated (1.5f, 2.0f), juce::Justification::centred);
+        g.setColour (juce::Colours::black.withAlpha (0.6f));
+        g.drawText ("Valved", logoR.translated (2.0f, 3.0f), juce::Justification::centred);
         g.setColour (cream);
         g.drawText ("Valved", logoR, juce::Justification::centred);
     }
