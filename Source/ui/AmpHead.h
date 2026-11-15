@@ -13,7 +13,7 @@ public:
 
     void setModel (int model);
     int getModel() const { return model; }
-    void refreshState();   // chamado pelo timer (ex.: escurecer Rate/Depth com chorus desligado)
+    void refreshState();   // chamado pelo timer
 
     void paint (juce::Graphics&) override;
     void resized() override;

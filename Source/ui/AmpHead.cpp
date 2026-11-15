@@ -10,9 +10,7 @@ namespace
     const std::vector<AmpHead::Control> controlsOf[4] = {
         { { ParamID::gain, "VOLUME", false, 0 },   { ParamID::treble, "TREBLE", false, 0 },
           { ParamID::mid, "MIDDLE", false, 0 },    { ParamID::bass, "BASS", false, 0 },
-          { ParamID::master, "MASTER", false, 1 },
-          { ParamID::chorus, "ON / OFF", true, 2 }, { ParamID::chorusRate, "RATE", false, 2 },
-          { ParamID::chorusDepth, "DEPTH", false, 2 } },
+          { ParamID::master, "MASTER", false, 1 } },
         { { ParamID::gain, "GAIN", false, 0 },     { ParamID::bass, "BASS", false, 0 },
           { ParamID::mid, "MIDDLE", false, 0 },    { ParamID::treble, "TREBLE", false, 0 },
           { ParamID::presence, "PRESENCE", false, 1 }, { ParamID::master, "MASTER", false, 1 } },
@@ -26,14 +24,14 @@ namespace
     };
 
     const std::vector<const char*> sectionTitles[4] = {
-        { "PREAMP", "OUTPUT", "CHORUS" },
+        { "PREAMP", "OUTPUT" },
         { "PREAMP", "POWER AMP" },
         { "PREAMP", "POWER AMP" },
         { "PREAMP", "MASTER" },
     };
 
     // Faixa horizontal (fração da largura do painel) onde ficam os controles
-    const float rangeOf[4][2] = { { 0.065f, 0.700f }, { 0.205f, 0.885f }, { 0.155f, 0.795f }, { 0.135f, 0.800f } };
+    const float rangeOf[4][2] = { { 0.090f, 0.540f }, { 0.205f, 0.885f }, { 0.155f, 0.795f }, { 0.135f, 0.800f } };
 
     const int knobStyleOf[4] = { KnobBlackPointer, KnobBrass, KnobBlackPointer, KnobBlackChrome };
 
@@ -270,13 +268,7 @@ void AmpHead::setModel (int m)
 
 void AmpHead::refreshState()
 {
-    const bool chorusOn = state.getRawParameterValue (ParamID::chorus)->load() > 0.5f;
-    for (auto* id : { ParamID::chorusRate, ParamID::chorusDepth })
-        if (auto* k = findSlider (id))
-        {
-            k->setEnabled (chorusOn);
-            k->setAlpha (chorusOn ? 1.0f : 0.4f);
-        }
+
 }
 
 AmpHead::Geometry AmpHead::computeGeometry() const
@@ -567,15 +559,14 @@ void AmpHead::drawClean (juce::Graphics& g, const Geometry& geo)
         g.setColour (juce::Colours::white.withAlpha (0.05f));
         g.fillRect (r.getX() + 3.0f, r.getY() + 1.0f, r.getWidth() - 6.0f, 1.0f);
     };
-    const float b1 = sectionBoundary (geo, list, 1), b2 = sectionBoundary (geo, list, 2);
+    const float b1 = sectionBoundary (geo, list, 1);
     const float pad = geo.knobD * 1.05f;
     boxFor (p.getX() + 4.0f, b1 - 3.0f);
-    boxFor (b1 + 3.0f, b2 - 3.0f);
-    const float chorusEnd = geo.pos.back().x + pad;
-    boxFor (b2 + 3.0f, chorusEnd);
+    const float outputEnd = geo.pos.back().x + pad;
+    boxFor (b1 + 3.0f, outputEnd);
 
     // Power e placa do nome
-    const float powerX0 = chorusEnd + 6.0f;
+    const float powerX0 = outputEnd + 6.0f;
     const float plateX0 = p.getX() + p.getWidth() * 0.845f;
     boxFor (powerX0, plateX0 - 4.0f);
     const float pcx = (powerX0 + plateX0 - 4.0f) * 0.5f;

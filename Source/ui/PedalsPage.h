@@ -42,7 +42,7 @@ private:
     juce::Rectangle<float> knobRect (int k) const;
 
     juce::AudioProcessorValueTreeState& state;
-    int index;               // 0..3 = drives, 4 = compressor
+    int index;               // 0..3 = drives, 4 = compressor, 5 = chorus
     int numKnobs = 3;
     juce::Slider knobs[4];
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> knobAtt[4];

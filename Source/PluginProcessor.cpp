@@ -52,14 +52,6 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
                 AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (v, 1); })));
         }
     }
-    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::chorus, 1 }, "Chorus", false));
-    // Rate: 5 = velocidade original do CE-1 (de 0,5x a 2x)
-    p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamID::chorusRate, 1 }, "Chorus Rate",
-        NormalisableRange<float> (0.0f, 10.0f, 0.01f), 5.0f,
-        AudioParameterFloatAttributes().withStringFromValueFunction (
-            [] (float v, int) { return "x" + String (std::pow (2.0f, (v - 5.0f) / 5.0f), 2); })));
-    p.push_back (knob (ParamID::chorusDepth, "Chorus Depth", 5.0f));
-
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::cabOn, 1 }, "Cab On", true));
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::cab, 1 }, "Cabinet", vlv::getCabNames(), 0));
     p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamID::micX, 1 }, "Mic Position",
@@ -96,6 +88,14 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
 
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::greenMode, 1 }, "Green Drive Mode",
         StringArray { "TS808", "TS9" }, 0));
+
+    // ---- Pedal de chorus Ensemble (CE-1), o primeiro da cadeia
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::ceOn, 1 }, "Chorus On", false));
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::ceMode, 1 }, "Chorus Vibrato Mode", false));
+    p.push_back (knob (ParamID::ceLevel, "Chorus Level", 5.0f));
+    p.push_back (knob (ParamID::ceIntensity, "Chorus Intensity", 5.0f));
+    p.push_back (knob (ParamID::ceDepth, "Chorus Vib Depth", 5.0f));
+    p.push_back (knob (ParamID::ceRate, "Chorus Vib Rate", 5.0f));
 
     // ---- Compressor (antes dos drives)
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::compOn, 1 }, "Comp On", false));
@@ -155,7 +155,6 @@ ValvedProcessor::ValvedProcessor()
         for (int k = 0; k < 7; ++k)
             pAmpKnob[m][k] = apvts.getRawParameterValue (ParamID::ampKnob (m, knobs[k]));   // nullptr se o amp não tem o knob
     }
-    pChorus    = apvts.getRawParameterValue (ParamID::chorus);
     pCabOn     = apvts.getRawParameterValue (ParamID::cabOn);
     pCab       = apvts.getRawParameterValue (ParamID::cab);
     pMicX      = apvts.getRawParameterValue (ParamID::micX);
@@ -166,8 +165,10 @@ ValvedProcessor::ValvedProcessor()
     pMicPresence = apvts.getRawParameterValue (ParamID::micPresence);
     pMd421Bass   = apvts.getRawParameterValue (ParamID::md421Bass);
     pOutput    = apvts.getRawParameterValue (ParamID::output);
-    pChorusRate  = apvts.getRawParameterValue (ParamID::chorusRate);
-    pChorusDepth = apvts.getRawParameterValue (ParamID::chorusDepth);
+    {
+        const char* ids[] = { ParamID::ceOn, ParamID::ceMode, ParamID::ceLevel, ParamID::ceIntensity, ParamID::ceDepth, ParamID::ceRate };
+        for (int k = 0; k < 6; ++k) pCe[k] = apvts.getRawParameterValue (ids[k]);
+    }
 
     for (int i = 0; i < 4; ++i)
     {
@@ -214,7 +215,8 @@ void ValvedProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     amp.prepare (sampleRate, samplesPerBlock);
     neuralAmp.prepare (sampleRate, samplesPerBlock);
     lastEngine = activeEngine();
-    chorus.prepare (sampleRate);
+    ensemble.setParams (pCe[0]->load() > 0.5f, pCe[1]->load() > 0.5f, pCe[2]->load(), pCe[3]->load(), pCe[4]->load(), pCe[5]->load());
+    ensemble.prepare (sampleRate);
     for (auto& pd : pedals) pd.prepare (sampleRate, samplesPerBlock);
     compressor.prepare (sampleRate, samplesPerBlock);
     delay.prepare (sampleRate);
@@ -232,7 +234,6 @@ void ValvedProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     tunerGain.reset (sampleRate, 0.02);
     inGain.setCurrentAndTargetValue (vlv::dbToGain (pInput->load()));
     outGain.setCurrentAndTargetValue (vlv::dbToGain (pOutput->load()));
-    chorusMix = pChorus->load() > 0.5f ? 1.0f : 0.0f;
 
     {
         const juce::ScopedLock sl (irLock);
@@ -364,7 +365,10 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     }
     gateMeter = gate.getGain();
 
-    // 5) Compressor -> overdrives (Green -> Yellow -> Gold -> Blue), antes do amp
+    // 5) Chorus Ensemble (primeiro pedal) -> compressor -> overdrives
+    ensemble.setParams (pCe[0]->load() > 0.5f, pCe[1]->load() > 0.5f, pCe[2]->load(), pCe[3]->load(), pCe[4]->load(), pCe[5]->load());
+    ensemble.process (m, n);
+    // Compressor -> overdrives (Green -> Yellow -> Gold -> Blue), antes do amp
     compressor.setEnabled (pComp[0]->load() > 0.5f);
     compressor.setParams (pComp[1]->load(), pComp[2]->load(), pComp[3]->load(), pComp[4]->load());
     compressor.process (m, n);
@@ -380,7 +384,6 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     auto knobVal = [this, &st] (int k) { auto* p = pAmpKnob[st.model][k]; return p != nullptr ? p->load() : 5.0f; };
     st.gain = knobVal (0); st.bass = knobVal (1); st.mid = knobVal (2); st.treble = knobVal (3);
     st.presence = knobVal (4); st.master = knobVal (5); st.resonance = knobVal (6);
-    chorus.setControls (pChorusDepth->load() / 10.0f, pChorusRate->load() / 10.0f);
     const int eng = activeEngine();
     if (eng != lastEngine)
     {
@@ -404,22 +407,13 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     for (int i = 0; i < n; ++i) m[i] *= levelMatch.getNextValue();
     for (int i = 0; i < n; ++i) m[i] *= gateGains[(size_t) i];
 
-    // 6) Estéreo com o chorus (seco + chorus nos dois lados, modulação em fase oposta)
-    // O chorus faz parte do Jazz 120 (só funciona nele)
-    const float chorusTarget = (pChorus->load() > 0.5f && (int) pAmp->load() == 0) ? 1.0f : 0.0f;
-    const float chorusStep = 1.0f / (0.02f * (float) getSampleRate());
+    // 6) Estéreo (o mesmo sinal nos dois lados; o delay e o reverb abrem o estéreo depois)
     float* L = buffer.getWritePointer (0);
     float* R = numOut > 1 ? buffer.getWritePointer (1) : nullptr;
     for (int i = 0; i < n; ++i)
     {
-        float l, r;
-        chorus.process (m[i], l, r);
-        if (chorusMix < chorusTarget) chorusMix = juce::jmin (chorusTarget, chorusMix + chorusStep);
-        else if (chorusMix > chorusTarget) chorusMix = juce::jmax (chorusTarget, chorusMix - chorusStep);
-        const float left = m[i] + (l - m[i]) * chorusMix;
-        const float right = m[i] + (r - m[i]) * chorusMix;
-        if (R != nullptr) { L[i] = left; R[i] = right; }
-        else L[i] = 0.5f * (left + right);
+        L[i] = m[i];
+        if (R != nullptr) R[i] = m[i];
     }
     for (int c = 2; c < buffer.getNumChannels(); ++c)
         buffer.clear (c, 0, n);

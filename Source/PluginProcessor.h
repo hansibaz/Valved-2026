@@ -12,6 +12,7 @@
 #include "dsp/Delay.h"
 #include "dsp/Reverb.h"
 #include "dsp/Tuner.h"
+#include "dsp/ChorusPedal.h"
 
 namespace ParamID
 {
@@ -25,9 +26,6 @@ namespace ParamID
     inline constexpr const char* treble    = "treble";
     inline constexpr const char* presence  = "presence";
     inline constexpr const char* master    = "master";
-    inline constexpr const char* chorus    = "chorus";
-    inline constexpr const char* chorusRate  = "chorusRate";
-    inline constexpr const char* chorusDepth = "chorusDepth";
     inline constexpr const char* resonance = "resonance";
     inline constexpr const char* engine    = "engine";      // motor do amp: 0 Circuit, 1 Neural
 
@@ -52,6 +50,12 @@ namespace ParamID
     }
 
     inline constexpr const char* greenMode   = "greenMode";    // TS808 / TS9
+    inline constexpr const char* ceOn        = "ceOn";         // pedal de chorus (Ensemble, CE-1)
+    inline constexpr const char* ceMode      = "ceMode";       // 0 chorus, 1 vibrato
+    inline constexpr const char* ceLevel     = "ceLevel";
+    inline constexpr const char* ceIntensity = "ceIntensity";
+    inline constexpr const char* ceDepth     = "ceDepth";
+    inline constexpr const char* ceRate      = "ceRate";
     inline constexpr const char* compOn      = "compOn";
     inline constexpr const char* compSustain = "compSustain";
     inline constexpr const char* compLevel   = "compLevel";
@@ -153,7 +157,7 @@ public:
     enum Engine { EngineCircuit = 0, EngineNeural = 1 };
     int activeEngine() const { return (int) pEngine->load(); }
 private:
-    vlv::CE1Chorus chorus;
+    vlv::pedal::EnsembleChorus ensemble;
     vlv::CabSim cab;
     vlv::Overdrive pedals[4] { vlv::Overdrive (vlv::PedalGreen), vlv::Overdrive (vlv::PedalYellow),
                                vlv::Overdrive (vlv::PedalGold), vlv::Overdrive (vlv::PedalBlue) };
@@ -164,16 +168,15 @@ private:
 
     juce::AudioBuffer<float> mono;
     juce::SmoothedValue<float> inGain, outGain;
-    float chorusMix = 0.0f;
 
     std::atomic<float>* pInput; std::atomic<float>* pGate; std::atomic<float>* pTranspose;
     std::atomic<float>* pAmp; std::atomic<float>* pGain; std::atomic<float>* pBass;
     std::atomic<float>* pMid; std::atomic<float>* pTreble; std::atomic<float>* pPresence;
-    std::atomic<float>* pMaster; std::atomic<float>* pChorus; std::atomic<float>* pCabOn;
+    std::atomic<float>* pMaster; std::atomic<float>* pCabOn;
     std::atomic<float>* pCab; std::atomic<float>* pMicX; std::atomic<float>* pMicDist;
     std::atomic<float>* pMic; std::atomic<float>* pMicAngle; std::atomic<float>* pMicBassCut; std::atomic<float>* pMicPresence; std::atomic<float>* pMd421Bass;
     std::atomic<float>* pOutput;
-    std::atomic<float>* pChorusRate; std::atomic<float>* pChorusDepth;
+    std::atomic<float>* pCe[6];
     std::atomic<float>* pResonance;
     std::atomic<float>* pEngine;
     std::atomic<float>* pAmpKnob[4][7] {};   // [amp][gain, bass, mid, treble, presence, master, resonance]

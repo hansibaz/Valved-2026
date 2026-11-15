@@ -17,7 +17,7 @@ namespace
     };
 
     // 0..3 = drives (Green, Yellow, Gold, Blue), 4 = compressor (Silver Comp)
-    const PedalLook looks[5] = {
+    const PedalLook looks[6] = {
         { juce::Colour (0xff4aa35c), juce::Colour (0xff1d5c2c), juce::Colour (0xfff3ecd6), KnobBlackPointer, 3,
           { { 0.27f, 0.18f, 0.28f }, { 0.50f, 0.30f, 0.18f }, { 0.73f, 0.18f, 0.28f } },
           { "DRIVE", "TONE", "LEVEL" }, "OVERDRIVE" },
@@ -33,12 +33,21 @@ namespace
         { juce::Colour (0xffe9ebee), juce::Colour (0xff8d9198), juce::Colour (0xff15171a), KnobBlackPointer, 4,
           { { 0.27f, 0.17f, 0.26f }, { 0.73f, 0.17f, 0.26f }, { 0.27f, 0.355f, 0.16f }, { 0.73f, 0.355f, 0.16f } },
           { "SUSTAIN", "LEVEL", "ATTACK", "CLIP" }, "OTA COMPRESSOR" },
+        { juce::Colour (0xff8fd0ef), juce::Colour (0xff3d86b3), juce::Colour (0xff0d1f2e), KnobBlackPointer, 4,
+          { { 0.27f, 0.17f, 0.26f }, { 0.73f, 0.17f, 0.26f }, { 0.27f, 0.355f, 0.16f }, { 0.73f, 0.355f, 0.16f } },
+          { "LEVEL", "INTENSITY", "VIB DEPTH", "VIB RATE" }, "BBD CHORUS ENSEMBLE" },
     };
+    bool isChorus (int look) { return look == 5; }
 
     bool isComp (int look) { return look == 4; }
 
     juce::String knobParam (int look, int k)
     {
+        if (look == 5)
+        {
+            static const char* ids[4] = { ParamID::ceLevel, ParamID::ceIntensity, ParamID::ceDepth, ParamID::ceRate };
+            return ids[k];
+        }
         if (isComp (look))
         {
             static const char* ids[4] = { ParamID::compSustain, ParamID::compLevel, ParamID::compAttack, ParamID::compClip };
@@ -48,7 +57,11 @@ namespace
         return ParamID::pedal (look, suffix[k]);
     }
 
-    juce::String onParam (int look) { return isComp (look) ? juce::String (ParamID::compOn) : ParamID::pedal (look, "On"); }
+    juce::String onParam (int look)
+    {
+        if (look == 5) return ParamID::ceOn;
+        return isComp (look) ? juce::String (ParamID::compOn) : ParamID::pedal (look, "On");
+    }
 
     constexpr float knobStart = juce::MathConstants<float>::pi * (7.0f / 6.0f);
     constexpr float knobEnd   = juce::MathConstants<float>::pi * (17.0f / 6.0f);
@@ -167,6 +180,13 @@ Stompbox::Stompbox (juce::AudioProcessorValueTreeState& s, int pedalIndex) : sta
         addAndMakeVisible (*modeSwitch);
         modeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (s, ParamID::greenMode, *modeSwitch);
     }
+    else if (isChorus (index))   // Ensemble: chave CHORUS / VIBRATO
+    {
+        modeSwitch = std::make_unique<MiniToggle> ("CHO", "VIB", looks[5].ink);
+        modeSwitch->setTooltip ("Chorus (INTENSITY) or Vibrato (VIB DEPTH / VIB RATE)");
+        addAndMakeVisible (*modeSwitch);
+        modeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (s, ParamID::ceMode, *modeSwitch);
+    }
 }
 
 juce::Rectangle<float> Stompbox::knobRect (int k) const
@@ -182,7 +202,7 @@ void Stompbox::resized()
     for (int k = 0; k < numKnobs; ++k) knobs[k].setBounds (knobRect (k).toNearestInt());
     const float W = (float) getWidth(), H = (float) getHeight();
     if (modeSwitch != nullptr)
-        modeSwitch->setBounds (juce::Rectangle<float> (W * 0.8f, 24.0f).withCentre ({ W * 0.5f, H * 0.685f }).toNearestInt());
+        modeSwitch->setBounds (juce::Rectangle<float> (W * 0.8f, 24.0f).withCentre ({ W * 0.5f, H * (isChorus (index) ? 0.695f : 0.685f) }).toNearestInt());
     const float fsz = W * 0.32f;
     footswitch.setBounds (juce::Rectangle<float> (fsz, fsz).withCentre ({ W * 0.5f, H * 0.82f }).toNearestInt());
     body = {};
@@ -340,6 +360,25 @@ void Stompbox::renderBody()
             g.drawText (lk.subtitle, juce::Rectangle<float> (r.getX(), plate.getBottom() + 3.0f, W, H * 0.05f), juce::Justification::centred);
             break;
         }
+        case 5:
+        {
+            // Placa azul-escura com "ENSEMBLE" e "CHORUS"
+            auto plate = juce::Rectangle<float> (r.getX() + W * 0.08f, nameY - H * 0.035f, W * 0.84f, H * 0.13f);
+            g.setColour (juce::Colour (0xff0d1f2e));
+            g.fillRoundedRectangle (plate, 3.0f);
+            g.setColour (juce::Colour (0xff8fd0ef).withAlpha (0.6f));
+            g.drawRoundedRectangle (plate.reduced (2.0f), 2.0f, 0.8f);
+            g.setColour (juce::Colour (0xffe9f6fd));
+            g.setFont (Fonts::wide (plate.getHeight() * 0.28f));
+            g.drawFittedText ("ENSEMBLE", plate.withTrimmedBottom (plate.getHeight() * 0.42f).withTrimmedTop (plate.getHeight() * 0.1f).reduced (6.0f, 0).toNearestInt(), juce::Justification::centred, 1);
+            g.setColour (juce::Colour (0xff8fd0ef));
+            g.setFont (Fonts::condensedBold (plate.getHeight() * 0.26f));
+            g.drawText ("C H O R U S", plate.withTrimmedTop (plate.getHeight() * 0.56f).withTrimmedBottom (plate.getHeight() * 0.08f), juce::Justification::centred);
+            g.setColour (lk.ink.withAlpha (0.75f));
+            g.setFont (Fonts::condensed (juce::jmax (9.0f, H * 0.03f)));
+            g.drawText (lk.subtitle, juce::Rectangle<float> (r.getX(), plate.getBottom() + 2.0f, W, H * 0.045f), juce::Justification::centred);
+            break;
+        }
         case 3:
         default:
         {
@@ -400,13 +439,21 @@ void Stompbox::refresh()
 {
     const bool on = state.getRawParameterValue (onParam (index))->load() > 0.5f;
     if (on != ledOn) { ledOn = on; repaint(); }
+    if (isChorus (index))
+    {
+        // modo CHORUS usa INTENSITY; modo VIBRATO usa VIB DEPTH e VIB RATE
+        const bool vib = state.getRawParameterValue (ParamID::ceMode)->load() > 0.5f;
+        knobs[1].setAlpha (vib ? 0.45f : 1.0f);
+        knobs[2].setAlpha (vib ? 1.0f : 0.45f);
+        knobs[3].setAlpha (vib ? 1.0f : 0.45f);
+    }
 }
 
 //==============================================================================
 PedalsPage::PedalsPage (ValvedProcessor& p)
 {
-    // Ordem do sinal: compressor primeiro, depois os drives
-    for (int look : { 4, 0, 1, 2, 3 })
+    // Ordem do sinal: chorus primeiro, depois o compressor e os drives
+    for (int look : { 5, 4, 0, 1, 2, 3 })
         addAndMakeVisible (pedals.add (new Stompbox (p.apvts, look)));
 }
 
@@ -438,7 +485,7 @@ void PedalsPage::paint (juce::Graphics& g)
     // Texto de orientação
     g.setColour (textDim);
     g.setFont (Fonts::condensed (16.0f));
-    g.drawText ("GUITAR  >  COMP  >  GREEN  >  YELLOW  >  GOLD  >  BLUE  >  AMP", getLocalBounds().removeFromTop (30).translated (0, 8), juce::Justification::centred);
+    g.drawText ("GUITAR  >  CHORUS  >  COMP  >  GREEN  >  YELLOW  >  GOLD  >  BLUE  >  AMP", getLocalBounds().removeFromTop (30).translated (0, 8), juce::Justification::centred);
     g.setColour (textDim.withAlpha (0.7f));
     g.setFont (Fonts::condensed (14.0f));
     g.drawText ("Tip: low drive + high level = clean boost that tightens and pushes the amp",
