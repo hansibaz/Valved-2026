@@ -404,7 +404,7 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     for (int i = 0; i < n; ++i) m[i] *= levelMatch.getNextValue();
     for (int i = 0; i < n; ++i) m[i] *= gateGains[(size_t) i];
 
-    // 6) Divide em estéreo com o chorus (lado esquerdo seco, direito com chorus)
+    // 6) Estéreo com o chorus (seco + chorus nos dois lados, modulação em fase oposta)
     // O chorus faz parte do Jazz 120 (só funciona nele)
     const float chorusTarget = (pChorus->load() > 0.5f && (int) pAmp->load() == 0) ? 1.0f : 0.0f;
     const float chorusStep = 1.0f / (0.02f * (float) getSampleRate());
@@ -416,9 +416,10 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         chorus.process (m[i], l, r);
         if (chorusMix < chorusTarget) chorusMix = juce::jmin (chorusTarget, chorusMix + chorusStep);
         else if (chorusMix > chorusTarget) chorusMix = juce::jmax (chorusTarget, chorusMix - chorusStep);
+        const float left = m[i] + (l - m[i]) * chorusMix;
         const float right = m[i] + (r - m[i]) * chorusMix;
-        if (R != nullptr) { L[i] = l; R[i] = right; }
-        else L[i] = 0.5f * (l + right);
+        if (R != nullptr) { L[i] = left; R[i] = right; }
+        else L[i] = 0.5f * (left + right);
     }
     for (int c = 2; c < buffer.getNumChannels(); ++c)
         buffer.clear (c, 0, n);

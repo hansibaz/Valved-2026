@@ -378,14 +378,15 @@ void SpeakerView::renderCab()
         g.fillRect (frameT, frameT, W, 16.0f);
         g.fillRect (frameT, frameT, 16.0f, H);
 
-        // Logo grande, centralizado na largura visível da caixa, entre o falante de cima e o de baixo
+        // Logo no centro da caixa (entre os 4 falantes), como nas 4x12 de verdade.
+        // Fica centralizado na caixa inteira, mesmo que a caixa não apareça toda.
         const juce::Colour cream (0xffeee4c8);
-        const float cyLogo = c.y + R * spacing * 0.5f;
-        auto logoR = juce::Rectangle<float> (frameT, cyLogo - R * 0.42f, W - frameT, R * 0.84f);
+        const juce::Point<float> lc (c.x + R * spacing * 0.5f, c.y + R * spacing * 0.5f);
+        auto logoR = juce::Rectangle<float> (R * 2.4f, R * 0.7f).withCentre (lc);
         {
             auto f = ui::Fonts::logo (100.0f);
             const float wAt100 = f.getStringWidthFloat ("Valved") * 1.08f;
-            g.setFont (ui::Fonts::logo (juce::jmin (logoR.getHeight(), 100.0f * logoR.getWidth() * 0.6f / wAt100)));
+            g.setFont (ui::Fonts::logo (juce::jmin (logoR.getHeight(), 100.0f * R * 1.7f / wAt100)));
         }
         g.setColour (juce::Colours::black.withAlpha (0.6f));
         g.drawText ("Valved", logoR.translated (2.0f, 3.0f), juce::Justification::centred);

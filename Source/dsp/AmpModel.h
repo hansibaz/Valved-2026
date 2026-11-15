@@ -108,7 +108,7 @@ private:
 //    ~1,75 Hz no meio)
 //  - Caminho molhado escuro: filtros anti-aliasing/reconstrução do BBD (~8 kHz), queda de ~3 dB/oitava
 //    a partir de 1 kHz e leve realce de médios-graves
-//  - Saídas estéreo como no JC-120: um lado direto (seco), o outro só efeito; em mono, 50/50
+//  - Saída estéreo: seco + chorus nos dois lados, com a modulação em fase oposta entre eles
 class CE1Chorus
 {
 public:
@@ -117,11 +117,15 @@ public:
         fs = sampleRate;
         buf.assign (4096, 0.0f);
         w = 0; lfo = 0.25;
-        preLp.lowpass (fs, 8000.0, 0.707);  postLp.lowpass (fs, 8000.0, 0.707);
-        postLp2.lowpass (fs, 9000.0, 0.54);
-        tilt.setCutoff (fs, 1000.0);
-        lowMid.peak (fs, 220.0, 0.8, 1.5);
-        preLp.reset(); postLp.reset(); postLp2.reset(); tilt.reset(); lowMid.reset();
+        preLp.lowpass (fs, 8000.0, 0.707); preLp.reset();
+        for (int c = 0; c < 2; ++c)
+        {
+            postLp[c].lowpass (fs, 8000.0, 0.707);
+            postLp2[c].lowpass (fs, 9000.0, 0.54);
+            tilt[c].setCutoff (fs, 1000.0);
+            lowMid[c].peak (fs, 220.0, 0.8, 1.5);
+            postLp[c].reset(); postLp2[c].reset(); tilt[c].reset(); lowMid[c].reset();
+        }
     }
 
     // intensity: 0..1 (knob DEPTH)   rateTrim: 0..1 (knob RATE; 0,5 = igual ao CE-1)
@@ -133,41 +137,51 @@ public:
         widthMs = 0.6 + 3.4 * (double) intens;
     }
 
-    inline void process (float x, float& direct, float& effect) noexcept
+    // Saída: esquerda e direita já mixadas (seco + chorus). Cada lado tem o chorus completo
+    // (seco + linha modulada), com o LFO do lado direito em fase oposta: funciona em fone, em
+    // caixas estéreo, em canal único e somado em mono (soa igual ao JC-120 ouvido na sala).
+    inline void process (float x, float& outL, float& outR) noexcept
     {
         // Entrada do BBD (filtro anti-aliasing)
         buf[(size_t) w] = preLp.process (x);
         lfo += rateHz / fs;
         if (lfo >= 1.0) lfo -= 1.0;
-        const double tri = lfo < 0.5 ? 4.0 * lfo - 1.0 : 3.0 - 4.0 * lfo;      // -1..1 triangular
-        const double delayMs = baseMs + 0.5 * widthMs * (tri + 1.0);
-        const double d = delayMs * 0.001 * fs;
-        const double pos = (double) w - d;
-        const double fl = std::floor (pos);
-        const float t = (float) (pos - fl);
-        const int i = (int) fl;
-        auto at = [this] (int k) { return buf[(size_t) (k & 4095)]; };
-        const float ym1 = at (i - 1), y0 = at (i), y1 = at (i + 1), y2 = at (i + 2);
-        const float c1 = 0.5f * (y1 - ym1), c2 = ym1 - 2.5f * y0 + 2.0f * y1 - 0.5f * y2, c3 = 0.5f * (y2 - ym1) + 1.5f * (y0 - y1);
-        float wet = ((c3 * t + c2) * t + c1) * t + y0;
+        auto tri = [] (double ph) { ph -= std::floor (ph); return ph < 0.5 ? 4.0 * ph - 1.0 : 3.0 - 4.0 * ph; };   // -1..1
+        auto readAt = [this] (double delayMs)
+        {
+            const double pos = (double) w - delayMs * 0.001 * fs;
+            const double fl = std::floor (pos);
+            const float t = (float) (pos - fl);
+            const int i = (int) fl;
+            auto at = [this] (int k) { return buf[(size_t) (k & 4095)]; };
+            const float ym1 = at (i - 1), y0 = at (i), y1 = at (i + 1), y2 = at (i + 2);
+            const float c1 = 0.5f * (y1 - ym1), c2 = ym1 - 2.5f * y0 + 2.0f * y1 - 0.5f * y2, c3 = 0.5f * (y2 - ym1) + 1.5f * (y0 - y1);
+            return ((c3 * t + c2) * t + c1) * t + y0;
+        };
+        float wa = readAt (baseMs + 0.5 * widthMs * (tri (lfo) + 1.0));
+        float wb = readAt (baseMs + 0.5 * widthMs * (tri (lfo + 0.5) + 1.0));
         w = (w + 1) & 4095;
-
-        // Reconstrução do BBD + caráter escuro do CE-1
-        wet = postLp2.process (postLp.process (wet));
-        wet = 0.5f * wet + 0.5f * tilt.lp (wet);          // ~ -3 dB/oitava acima de 1 kHz
-        wet = lowMid.process (wet);
-        wet = std::tanh (wet * 1.3f) / 1.3f;               // o CE-1 satura fácil
-        direct = x;
-        effect = wet * 1.12f;
+        wa = colour (wa, 0); wb = colour (wb, 1);
+        // mistura 50/50 como o CE-1/JC-120 em mono; ganho para manter o volume do sinal seco
+        outL = 0.82f * (x + wa);
+        outR = 0.82f * (x + wb);
     }
 
 private:
+    // Reconstrução do BBD + caráter escuro do CE-1
+    inline float colour (float v, int c) noexcept
+    {
+        v = postLp2[c].process (postLp[c].process (v));
+        v = 0.5f * v + 0.5f * tilt[c].lp (v);              // ~ -3 dB/oitava acima de 1 kHz
+        v = lowMid[c].process (v);
+        return std::tanh (v * 1.3f) / 1.3f * 1.12f;        // o CE-1 satura fácil
+    }
     std::vector<float> buf;
     double fs = 48000, lfo = 0.25, rateHz = 1.73, widthMs = 2.3;
     const double baseMs = 2.5;
     float intens = 0.5f;
     int w = 0;
-    Biquad preLp, postLp, postLp2, lowMid;
-    OnePole tilt;
+    Biquad preLp, postLp[2], postLp2[2], lowMid[2];
+    OnePole tilt[2];
 };
 } // namespace vlv
