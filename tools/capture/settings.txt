@@ -1,0 +1,2 @@
+probe_ch0 8=0.0
+probe_ch1 8=1.0
