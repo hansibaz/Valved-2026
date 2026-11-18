@@ -13,6 +13,7 @@
 #include "dsp/Reverb.h"
 #include "dsp/Tuner.h"
 #include "dsp/ChorusPedal.h"
+#include "dsp/Denoiser.h"
 
 namespace ParamID
 {
@@ -50,6 +51,7 @@ namespace ParamID
     }
 
     inline constexpr const char* greenMode   = "greenMode";    // TS808 / TS9
+    inline constexpr const char* denoise     = "denoise";      // redutor de ruído (0..10)
     inline constexpr const char* quality     = "quality";      // 0 baixa, 1 média, 2 alta
     inline constexpr const char* ceOn        = "ceOn";         // pedal de chorus (Ensemble, CE-1)
     inline constexpr const char* ceMode      = "ceMode";       // 0 chorus, 1 vibrato
@@ -160,6 +162,8 @@ public:
 private:
     vlv::pedal::EnsembleChorus ensemble;
     std::atomic<float>* pQuality = nullptr;
+    std::atomic<float>* pDenoise = nullptr;
+    vlv::Denoiser denoiser;
     int appliedQuality = 1;
     vlv::CabSim cab;
     vlv::Overdrive pedals[4] { vlv::Overdrive (vlv::PedalGreen), vlv::Overdrive (vlv::PedalYellow),

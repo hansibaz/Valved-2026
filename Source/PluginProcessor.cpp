@@ -89,6 +89,11 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::greenMode, 1 }, "Green Drive Mode",
         StringArray { "TS808", "TS9" }, 0));
 
+    // ---- Redutor de ruído (antes do amp; independente do gate)
+    p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamID::denoise, 1 }, "Noise Reduction",
+        NormalisableRange<float> (0.0f, 10.0f, 0.01f), 5.0f,
+        AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return v < 0.05f ? String ("OFF") : String (v, 1); })));
+
     // ---- Qualidade (sobreamostragem): baixa / média / alta
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::quality, 1 }, "Quality",
         StringArray { "Low", "Medium", "High" }, 1, AudioParameterChoiceAttributes().withAutomatable (false)));
@@ -170,6 +175,7 @@ ValvedProcessor::ValvedProcessor()
     pMd421Bass   = apvts.getRawParameterValue (ParamID::md421Bass);
     pOutput    = apvts.getRawParameterValue (ParamID::output);
     pQuality = apvts.getRawParameterValue (ParamID::quality);
+    pDenoise = apvts.getRawParameterValue (ParamID::denoise);
     {
         const char* ids[] = { ParamID::ceOn, ParamID::ceMode, ParamID::ceLevel, ParamID::ceIntensity, ParamID::ceDepth, ParamID::ceRate };
         for (int k = 0; k < 6; ++k) pCe[k] = apvts.getRawParameterValue (ids[k]);
@@ -214,6 +220,7 @@ void ValvedProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     mono.setSize (1, juce::jmax (1, samplesPerBlock), false, true, false);
 
     gate.prepare (sampleRate);
+    denoiser.prepare (sampleRate);
     shifter.prepare (sampleRate);
     gateGains.assign ((size_t) juce::jmax (1, samplesPerBlock), 1.0f);
     gateDelay.assign (1 << 13, 1.0f); gateDelayW = 0;
@@ -379,6 +386,10 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         m[i] = shifter.process (m[i]);
     }
     gateMeter = gate.getGain();
+
+    // 4b) Redutor de ruído: limpa o chiado da guitarra antes dos pedais e do amp
+    denoiser.setAmount (pDenoise->load());
+    denoiser.process (m, n);
 
     // 5) Chorus Ensemble (primeiro pedal) -> compressor -> overdrives
     ensemble.setParams (pCe[0]->load() > 0.5f, pCe[1]->load() > 0.5f, pCe[2]->load(), pCe[3]->load(), pCe[4]->load(), pCe[5]->load());

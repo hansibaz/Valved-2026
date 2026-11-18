@@ -47,6 +47,7 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
     : AudioProcessorEditor (&p), proc (p),
       input (p.apvts, ParamID::input, "INPUT"),
       gate (p.apvts, ParamID::gate, "GATE"),
+      denoise (p.apvts, ParamID::denoise, "NOISE RED."),
       transpose (p.apvts, ParamID::transpose, "TRANSPOSE"),
       output (p.apvts, ParamID::output, "OUTPUT"),
       head (p.apvts),
@@ -64,7 +65,7 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
     cabTab.onClick    = [this] { showPage (PageCab); };
     fxTab.onClick     = [this] { showPage (PageFx); };
 
-    for (auto* k : { &input, &gate, &transpose, &output })
+    for (auto* k : { &input, &gate, &denoise, &transpose, &output })
         addAndMakeVisible (k);
 
     tuningLabel.setFont (Fonts::condensed (15.0f));
@@ -242,7 +243,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.23", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.24", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawText ("QUALITY", qualityLabelArea, juce::Justification::centredRight);
 
@@ -280,9 +281,11 @@ void ValvedEditor::resized()
     row2.removeFromLeft (10);
     gate.setBounds (row2.removeFromLeft (92));
     row2.removeFromLeft (10);
+    denoise.setBounds (row2.removeFromLeft (92));
+    row2.removeFromLeft (10);
     transpose.setBounds (row2.removeFromLeft (92));
     row2.removeFromLeft (8);
-    tuningLabel.setBounds (row2.removeFromLeft (260).withSizeKeepingCentre (260, 24).translated (0, 4));
+    tuningLabel.setBounds (row2.removeFromLeft (200).withSizeKeepingCentre (200, 24).translated (0, 4));
 
     auto meters = row2.removeFromRight (44).withTrimmedTop (14).withTrimmedBottom (18);
     inMeter.setBounds (meters.removeFromLeft (14));
