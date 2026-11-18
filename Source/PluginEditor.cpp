@@ -74,18 +74,6 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
 
     tunerBtn.setClickingTogglesState (true);
     tunerBtn.setTooltip ("Tuner");
-    // Ground filter: tira o zumbido da rede e o apito USB da interface
-    groundBtn.setClickingTogglesState (true);
-    groundBtn.setTooltip ("Removes mains hum (50/60 Hz) and USB whine (1 kHz) picked up by the guitar and the audio interface. "
-                          "It learns the noise during pauses: rest your hands for a few seconds after turning it on.");
-    groundBtn.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff2f8f55));
-    addAndMakeVisible (groundBtn);
-    groundAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (p.apvts, ParamID::groundFilter, groundBtn);
-    groundStatus.setFont (Fonts::condensed (12.0f));
-    groundStatus.setColour (juce::Label::textColourId, textDim);
-    groundStatus.setJustificationType (juce::Justification::centred);
-    addAndMakeVisible (groundStatus);
-
     tunerBtn.onClick = [this]
     {
         proc.tunerActive = tunerBtn.getToggleState();
@@ -237,17 +225,6 @@ void ValvedEditor::timerCallback()
     }
     inMeter.setLevel (proc.getInputLevel());
     outMeter.setLevel (proc.getOutputLevel());
-    {
-        juce::String st;
-        if (! groundBtn.getToggleState()) st = "OFF";
-        else
-        {
-            const int hum = proc.groundFilter.humLines.load(), usb = proc.groundFilter.usbLines.load();
-            if (hum + usb == 0) st = proc.groundFilter.quietAnalyses.load() >= 4 ? "NO HUM DETECTED" : "LEARNING... REST YOUR HANDS";
-            else st = juce::String (hum) + " HUM + " + juce::String (usb) + " USB LINES REMOVED";
-        }
-        if (groundStatus.getText() != st) groundStatus.setText (st, juce::dontSendNotification);
-    }
 }
 
 void ValvedEditor::paint (juce::Graphics& g)
@@ -265,7 +242,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.26", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.27", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawText ("QUALITY", qualityLabelArea, juce::Justification::centredRight);
 
@@ -305,12 +282,7 @@ void ValvedEditor::resized()
     row2.removeFromLeft (10);
     transpose.setBounds (row2.removeFromLeft (92));
     row2.removeFromLeft (8);
-    tuningLabel.setBounds (row2.removeFromLeft (170).withSizeKeepingCentre (170, 24).translated (0, 4));
-    {
-        auto ga = row2.removeFromLeft (190);
-        groundBtn.setBounds (ga.withSizeKeepingCentre (150, 30).translated (0, -6));
-        groundStatus.setBounds (ga.withSizeKeepingCentre (190, 16).translated (0, 20));
-    }
+    tuningLabel.setBounds (row2.removeFromLeft (260).withSizeKeepingCentre (260, 24).translated (0, 4));
 
     auto meters = row2.removeFromRight (44).withTrimmedTop (14).withTrimmedBottom (18);
     inMeter.setBounds (meters.removeFromLeft (14));

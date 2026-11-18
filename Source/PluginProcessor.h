@@ -13,7 +13,6 @@
 #include "dsp/Reverb.h"
 #include "dsp/Tuner.h"
 #include "dsp/ChorusPedal.h"
-#include "dsp/GroundFilter.h"
 
 namespace ParamID
 {
@@ -51,7 +50,6 @@ namespace ParamID
     }
 
     inline constexpr const char* greenMode   = "greenMode";    // TS808 / TS9
-    inline constexpr const char* groundFilter = "groundFilter"; // remove zumbido da rede e apito USB
     inline constexpr const char* quality     = "quality";      // 0 baixa, 1 média, 2 alta
     inline constexpr const char* ceOn        = "ceOn";         // pedal de chorus (Ensemble, CE-1)
     inline constexpr const char* ceMode      = "ceMode";       // 0 chorus, 1 vibrato
@@ -127,7 +125,6 @@ public:
 
     // Afinador: o áudio da guitarra vai para a fila; a análise roda na interface
     vlv::TunerFeed tunerFeed;
-    vlv::GroundFilter groundFilter;   // público: a interface mostra o que foi detectado
     std::atomic<bool> tunerActive { false }, tunerMute { true };
     std::atomic<double> tunerRef { 440.0 };
 
@@ -163,8 +160,7 @@ public:
 private:
     vlv::pedal::EnsembleChorus ensemble;
     std::atomic<float>* pQuality = nullptr;
-    std::atomic<float>* pGround = nullptr;
-    int groundTick = 0;
+
 
     int appliedQuality = 1;
     vlv::CabSim cab;
