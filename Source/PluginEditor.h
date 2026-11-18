@@ -51,7 +51,7 @@ private:
     ValvedLook look;
 
     juce::TextButton pedalsTab { "PEDALS" }, ampTab { "AMP" }, cabTab { "CAB" }, fxTab { "FX" };
-    TopKnob input, gate, denoise, transpose, output;
+    TopKnob input, gate, transpose, output;
     juce::Label tuningLabel;
     juce::TextButton tunerBtn { "TUNER" };
     juce::TextButton qualityBtn[3] { juce::TextButton ("LOW"), juce::TextButton ("MED"), juce::TextButton ("HIGH") };

@@ -133,175 +133,210 @@ namespace
     }
 
     // ---------------- Microfones (desenho em escala real, em mm) ----------------
-    // Eixo x = eixo do microfone (0 = frente/cápsula, positivo = para trás, até o conector).
-    // Sombreamento cilíndrico: borda escura, reflexo no terço superior.
+    // Vista lateral, deitado sobre a tela. Eixo x = eixo do microfone (0 = frente/cápsula,
+    // positivo = para trás, até o conector). Medidas das fichas técnicas:
+    //  SM57: 157 mm, cabeça de 32 mm (malha de aço sobre grade preta), cabo cinza-escuro afinando.
+    //  SM7B: ~190 mm, espuma grande (~96 mm), corpo preto cilíndrico, garfo (yoke) com porca lateral.
+    //  MD 421-II: 215 mm, ~48 mm, cesta preta com fendas transversais, anel de graves, presilha.
     struct MicPainter
     {
-        juce::Graphics& g; bool shadow; float faceF;
+        juce::Graphics& g; bool shadow;
 
-        juce::ColourGradient cyl (float r, juce::Colour base, float shine = 0.35f) const
-        {
-            juce::ColourGradient cg (base.darker (0.9f), 0.0f, -r, base.darker (0.9f), 0.0f, r, false);
-            cg.addColour (0.12, base.darker (0.2f));
-            cg.addColour (0.30, base.brighter (shine));
-            cg.addColour (0.42, base.brighter (shine * 0.4f));
-            cg.addColour (0.70, base.darker (0.35f));
-            return cg;
-        }
-        void fill (const juce::Path& p, float r, juce::Colour base, float shine = 0.35f) const
-        {
-            if (shadow) { g.setColour (juce::Colours::black.withAlpha (0.5f)); g.fillPath (p); return; }
-            g.setGradientFill (cyl (r, base, shine));
-            g.fillPath (p);
-        }
-        // tronco de cone de x0 (raio r0) até x1 (raio r1)
-        static juce::Path section (float x0, float r0, float x1, float r1, float round = 0.0f)
+        // perfil simétrico a partir de pares (x, raio), com cantos suavizados
+        static juce::Path profile (std::initializer_list<juce::Point<float>> pts, float round = 2.0f)
         {
             juce::Path p;
-            if (round <= 0.0f)
-            {
-                p.startNewSubPath (x0, -r0); p.lineTo (x1, -r1); p.lineTo (x1, r1); p.lineTo (x0, r0); p.closeSubPath();
-            }
-            else
-                p.addRoundedRectangle (x0, -juce::jmax (r0, r1), x1 - x0, 2.0f * juce::jmax (r0, r1), round);
-            return p;
+            std::vector<juce::Point<float>> v (pts);
+            p.startNewSubPath (v.front().x, -v.front().y);
+            for (size_t i = 1; i < v.size(); ++i) p.lineTo (v[i].x, -v[i].y);
+            for (size_t i = v.size(); i-- > 0;) p.lineTo (v[i].x, v[i].y);
+            p.closeSubPath();
+            return round > 0.0f ? p.createPathWithRoundedCorners (round) : p;
         }
-        // linhas finas ao longo da seção (textura de tela / frisos)
-        void lines (float x0, float x1, float r, float step, juce::Colour c, bool across) const
+        // sombreamento de cilindro (luz vindo de cima)
+        void shade (const juce::Path& p, float r, juce::Colour base, float shine = 0.35f) const
+        {
+            if (shadow) { g.setColour (juce::Colours::black.withAlpha (0.5f)); g.fillPath (p); return; }
+            juce::ColourGradient cg (base.darker (1.2f), 0.0f, -r, base.darker (1.0f), 0.0f, r, false);
+            cg.addColour (0.10, base.darker (0.25f));
+            cg.addColour (0.26, base.brighter (shine));
+            cg.addColour (0.36, base.brighter (shine * 0.35f));
+            cg.addColour (0.62, base.darker (0.25f));
+            cg.addColour (0.88, base.darker (0.7f));
+            g.setGradientFill (cg);
+            g.fillPath (p);
+        }
+        void edge (const juce::Path& p, float alpha = 0.10f) const
         {
             if (shadow) return;
-            g.setColour (c);
-            if (across) for (float x = x0 + step * 0.5f; x < x1; x += step) g.fillRect (x - 0.35f, -r, 0.7f, 2.0f * r);
-            else        for (float y = -r + step * 0.5f; y < r; y += step) g.fillRect (x0, y - 0.3f, x1 - x0, 0.6f);
+            g.setColour (juce::Colours::white.withAlpha (alpha));
+            g.strokePath (p, juce::PathStrokeType (0.5f));
         }
-        // tela metálica (malha) recortada na seção
-        void mesh (const juce::Path& clip, float x0, float x1, float r, float cell) const
+        // malha metálica (tela de aço) dentro de um contorno
+        void mesh (const juce::Path& clip, float x0, float x1, float r, float cell, float alpha) const
         {
             if (shadow) return;
             juce::Graphics::ScopedSaveState ss (g);
             g.reduceClipRegion (clip);
-            g.setColour (juce::Colours::black.withAlpha (0.45f));
-            for (float x = x0; x < x1; x += cell) g.fillRect (x, -r, cell * 0.38f, 2.0f * r);
-            for (float y = -r; y < r; y += cell) g.fillRect (x0, y, x1 - x0, cell * 0.38f);
+            g.setColour (juce::Colours::black.withAlpha (alpha));
+            for (float x = x0; x < x1; x += cell) g.fillRect (x, -r, cell * 0.42f, 2.0f * r);
+            for (float y = -r; y < r; y += cell) g.fillRect (x0, y, x1 - x0, cell * 0.42f);
+            g.setColour (juce::Colours::white.withAlpha (alpha * 0.25f));
+            for (float x = x0 + cell * 0.5f; x < x1; x += cell) g.fillRect (x, -r, cell * 0.12f, 2.0f * r);
         }
-        // face frontal (elipse: quanto mais fora do eixo, mais estreita)
-        void face (float r, juce::Colour base, bool meshFace, float cell) const
-        {
-            const float w = r * faceF;
-            juce::Path e; e.addEllipse (-w, -r, 2.0f * w, 2.0f * r);
-            if (shadow) { g.setColour (juce::Colours::black.withAlpha (0.5f)); g.fillPath (e); return; }
-            juce::ColourGradient fg (base.brighter (0.25f), -w, -r * 0.6f, base.darker (0.8f), w, r, false);
-            g.setGradientFill (fg);
-            g.fillPath (e);
-            if (meshFace) mesh (e, -w, w, r, cell);
-            g.setColour (juce::Colours::white.withAlpha (0.10f));
-            g.drawEllipse (-w, -r, 2.0f * w, 2.0f * r, 0.8f);
-        }
+        void fillShadowOnly (const juce::Path& p) const { g.setColour (juce::Colours::black.withAlpha (0.5f)); g.fillPath (p); }
 
-        // Shure SM57: 157 mm, tela de 32 mm, corpo cinza-chumbo afinando para trás
+        // ---------------------------------------------------------------- Shure SM57
         void sm57() const
         {
-            const juce::Colour grille (0xff3d3f43), body (0xff505157), ring (0xff1a1a1c);
-            auto gr = section (0.0f, 16.0f, 38.0f, 16.0f, 3.0f);
-            fill (gr, 16.0f, grille, 0.45f);
-            mesh (gr, 0.0f, 38.0f, 16.0f, 1.6f);
-            fill (section (37.0f, 15.6f, 41.0f, 15.0f), 15.6f, ring, 0.2f);                       // anel/ranhura
-            juce::Path b; b.startNewSubPath (41.0f, -15.0f); b.quadraticTo (52.0f, -12.4f, 62.0f, -12.4f);
-            b.lineTo (146.0f, -12.0f); b.lineTo (146.0f, 12.0f); b.lineTo (62.0f, 12.4f); b.quadraticTo (52.0f, 12.4f, 41.0f, 15.0f); b.closeSubPath();
-            fill (b, 13.0f, body, 0.30f);
-            fill (section (146.0f, 12.0f, 157.0f, 11.0f, 2.0f), 12.0f, juce::Colour (0xff6b6d72), 0.5f);  // conector
-            face (16.0f, grille, true, 1.6f);
-        }
-
-        // Shure SM7B: 190 mm, espuma grande na frente, corpo preto, garfo (yoke) com manopla lateral
-        void sm7b() const
-        {
-            const juce::Colour foam (0xff1b1b1d), body (0xff232327), yoke (0xff2e2f33);
-            // corpo
-            fill (section (40.0f, 31.0f, 178.0f, 31.0f, 6.0f), 31.0f, body, 0.45f);
-            fill (section (176.0f, 29.0f, 190.0f, 27.0f, 3.0f), 29.0f, juce::Colour (0xff3a3b40), 0.4f);   // painel traseiro
-            // garfo (yoke): braço lateral que sai do corpo, com a manopla grande
-            {
-                juce::Path y; y.addRoundedRectangle (92.0f, -36.0f, 46.0f, 72.0f, 10.0f);
-                if (shadow) { g.setColour (juce::Colours::black.withAlpha (0.5f)); g.fillPath (y); }
-                else
-                {
-                    juce::ColourGradient yg (yoke.brighter (0.3f), 92.0f, -36.0f, yoke.darker (0.7f), 138.0f, 36.0f, false);
-                    g.setGradientFill (yg); g.fillPath (y);
-                    g.setColour (juce::Colours::white.withAlpha (0.08f)); g.strokePath (y, juce::PathStrokeType (0.8f));
-                }
-                const float kr = 15.0f; const juce::Point<float> kc (115.0f, 0.0f);
-                juce::Path k; k.addEllipse (kc.x - kr, kc.y - kr, kr * 2, kr * 2);
-                if (shadow) { g.setColour (juce::Colours::black.withAlpha (0.5f)); g.fillPath (k); }
-                else
-                {
-                    juce::ColourGradient kg (juce::Colour (0xffa9abb0), kc.x - kr, kc.y - kr, juce::Colour (0xff2c2d31), kc.x + kr, kc.y + kr, false);
-                    g.setGradientFill (kg); g.fillPath (k);
-                    g.setColour (juce::Colours::black.withAlpha (0.5f));
-                    for (int i = 0; i < 16; ++i)
-                    {
-                        const float a = juce::MathConstants<float>::twoPi * i / 16.0f;
-                        g.drawLine (kc.x + std::cos (a) * kr * 0.75f, kc.y + std::sin (a) * kr * 0.75f, kc.x + std::cos (a) * kr, kc.y + std::sin (a) * kr, 0.8f);
-                    }
-                    g.setColour (juce::Colour (0xff1c1c1f));
-                    g.fillEllipse (kc.x - kr * 0.35f, kc.y - kr * 0.35f, kr * 0.7f, kr * 0.7f);
-                }
-            }
-            // espuma (windscreen) bojuda
-            juce::Path f; f.addRoundedRectangle (0.0f, -46.0f, 62.0f, 92.0f, 30.0f);
-            fill (f, 46.0f, foam, 0.25f);
+            const juce::Colour body (0xff4b4d52), grille (0xff3a3c40), collar (0xff141416), xlr (0xff8a8d93);
+            // cabo: 30 mm junto da cabeça afinando para ~23 mm no conector
+            auto handle = profile ({ { 44.0f, 15.0f }, { 52.0f, 14.6f }, { 148.0f, 11.6f }, { 152.0f, 11.4f } }, 1.5f);
+            shade (handle, 15.0f, body, 0.30f);
+            edge (handle);
+            // anel do conector XLR
+            auto end = profile ({ { 151.0f, 11.4f }, { 157.0f, 11.0f } }, 1.0f);
+            shade (end, 11.4f, xlr, 0.55f);
+            // gola preta (grade de policarbonato) entre a cabeça e o cabo
+            auto col = profile ({ { 38.0f, 16.0f }, { 46.0f, 15.2f } }, 1.0f);
+            shade (col, 16.0f, collar, 0.25f);
+            // cabeça: malha de aço, frente reta com borda arredondada
+            auto head = profile ({ { 0.0f, 14.5f }, { 1.5f, 16.0f }, { 39.0f, 16.0f } }, 3.0f);
+            shade (head, 16.0f, grille, 0.55f);
+            mesh (head, 0.0f, 39.0f, 16.0f, 1.25f, 0.55f);
+            edge (head, 0.14f);
+            // aro na frente e a fenda entre malha e gola
             if (! shadow)
             {
+                g.setColour (juce::Colours::black.withAlpha (0.55f));
+                g.fillRect (38.0f, -15.8f, 1.2f, 31.6f);
+                g.setColour (juce::Colours::white.withAlpha (0.12f));
+                g.fillRect (0.6f, -14.0f, 0.8f, 28.0f);
+            }
+        }
+
+        // ---------------------------------------------------------------- Shure SM7B
+        void sm7b() const
+        {
+            const juce::Colour body (0xff1e1f22), foam (0xff19191b), yoke (0xff2a2b2f), nut (0xff9fa2a8);
+            // garfo (yoke): braço que desce do pino lateral até a base de rosca
+            {
+                auto arm = profile ({ { 92.0f, 9.0f }, { 132.0f, 9.0f } }, 4.0f).createPathWithRoundedCorners (0.0f);
+                juce::Path y; y.addRoundedRectangle (100.0f, 0.0f, 22.0f, 72.0f, 5.0f);
+                juce::Path base; base.addRoundedRectangle (93.0f, 64.0f, 36.0f, 18.0f, 4.0f);
+                if (shadow) { fillShadowOnly (y); fillShadowOnly (base); }
+                else
+                {
+                    juce::ColourGradient yg (yoke.brighter (0.35f), 100.0f, 0.0f, yoke.darker (0.6f), 122.0f, 0.0f, false);
+                    g.setGradientFill (yg); g.fillPath (y); g.fillPath (base);
+                    g.setColour (juce::Colours::white.withAlpha (0.08f)); g.strokePath (y, juce::PathStrokeType (0.6f)); g.strokePath (base, juce::PathStrokeType (0.6f));
+                }
+                juce::ignoreUnused (arm);
+            }
+            // corpo cilíndrico preto com borda frontal e traseira
+            auto bodyP = profile ({ { 50.0f, 33.0f }, { 56.0f, 32.0f }, { 180.0f, 32.0f }, { 186.0f, 30.0f }, { 190.0f, 27.0f } }, 3.0f);
+            shade (bodyP, 33.0f, body, 0.40f);
+            edge (bodyP, 0.08f);
+            if (! shadow)
+            {
+                // frisos de acabamento do corpo
+                g.setColour (juce::Colours::black.withAlpha (0.5f));
+                g.fillRect (60.0f, -32.0f, 1.0f, 64.0f);
+                g.fillRect (176.0f, -32.0f, 1.0f, 64.0f);
+            }
+            // porca grande do garfo (no centro do corpo)
+            {
+                const float kr = 17.0f; const juce::Point<float> kc (111.0f, 0.0f);
+                juce::Path k; k.addEllipse (kc.x - kr, kc.y - kr, kr * 2, kr * 2);
+                if (shadow) fillShadowOnly (k);
+                else
+                {
+                    juce::ColourGradient kg (nut.brighter (0.3f), kc.x - kr, kc.y - kr, nut.darker (1.4f), kc.x + kr, kc.y + kr, false);
+                    g.setGradientFill (kg); g.fillPath (k);
+                    g.setColour (juce::Colours::black.withAlpha (0.45f));
+                    for (int i = 0; i < 24; ++i)
+                    {
+                        const float a = juce::MathConstants<float>::twoPi * (float) i / 24.0f;
+                        g.drawLine (kc.x + std::cos (a) * kr * 0.80f, kc.y + std::sin (a) * kr * 0.80f, kc.x + std::cos (a) * kr, kc.y + std::sin (a) * kr, 0.9f);
+                    }
+                    juce::ColourGradient cg2 (juce::Colour (0xff3a3b40), kc.x - kr * 0.5f, kc.y - kr * 0.5f, juce::Colour (0xff101012), kc.x + kr * 0.5f, kc.y + kr * 0.5f, false);
+                    g.setGradientFill (cg2);
+                    g.fillEllipse (kc.x - kr * 0.62f, kc.y - kr * 0.62f, kr * 1.24f, kr * 1.24f);
+                    g.setColour (juce::Colours::white.withAlpha (0.25f));
+                    g.drawEllipse (kc.x - kr, kc.y - kr, kr * 2, kr * 2, 0.6f);
+                }
+            }
+            // espuma (windscreen): domo grande e arredondado, um pouco mais largo que o corpo
+            juce::Path f;
+            f.startNewSubPath (58.0f, -46.0f);
+            f.cubicTo (30.0f, -50.0f, 0.0f, -40.0f, 0.0f, 0.0f);
+            f.cubicTo (0.0f, 40.0f, 30.0f, 50.0f, 58.0f, 46.0f);
+            f.cubicTo (62.0f, 30.0f, 62.0f, -30.0f, 58.0f, -46.0f);
+            f.closeSubPath();
+            if (shadow) fillShadowOnly (f);
+            else
+            {
+                juce::ColourGradient fg (juce::Colour (0xff3b3b40), 18.0f, -30.0f, foam, 40.0f, 30.0f, true);
+                fg.addColour (0.65, juce::Colour (0xff1c1c1f));
+                g.setGradientFill (fg);
+                g.fillPath (f);
                 juce::Graphics::ScopedSaveState ss (g);
                 g.reduceClipRegion (f);
                 juce::Random rng (5);
-                for (int i = 0; i < 900; ++i)
+                for (int i = 0; i < 2600; ++i)
                 {
-                    g.setColour ((rng.nextBool() ? juce::Colours::white : juce::Colours::black).withAlpha (0.08f));
-                    g.fillRect (rng.nextFloat() * 62.0f, rng.nextFloat() * 92.0f - 46.0f, 0.9f, 0.9f);
+                    g.setColour ((rng.nextBool() ? juce::Colours::white : juce::Colours::black).withAlpha (0.09f));
+                    g.fillRect (rng.nextFloat() * 62.0f, rng.nextFloat() * 100.0f - 50.0f, 0.8f, 0.8f);
                 }
-            }
-            // frente da espuma: domo arredondado com textura
-            {
-                const float r = 46.0f, w = r * juce::jmax (0.55f, faceF);
-                juce::Path e; e.addEllipse (-w, -r, 2.0f * w, 2.0f * r);
-                if (shadow) { g.setColour (juce::Colours::black.withAlpha (0.5f)); g.fillPath (e); }
-                else
-                {
-                    juce::ColourGradient fg (juce::Colour (0xff3a3a3e), -w * 0.4f, -r * 0.5f, juce::Colour (0xff0d0d0f), w * 0.6f, r * 0.8f, true);
-                    g.setGradientFill (fg);
-                    g.fillPath (e);
-                    juce::Graphics::ScopedSaveState ss (g);
-                    g.reduceClipRegion (e);
-                    juce::Random rng (9);
-                    for (int i = 0; i < 1400; ++i)
-                    {
-                        g.setColour ((rng.nextBool() ? juce::Colours::white : juce::Colours::black).withAlpha (0.10f));
-                        g.fillRect (rng.nextFloat() * 2.0f * w - w, rng.nextFloat() * 2.0f * r - r, 0.9f, 0.9f);
-                    }
-                }
+                // sombra suave onde a espuma encosta no corpo
+                juce::ColourGradient sg (juce::Colours::transparentBlack, 44.0f, 0.0f, juce::Colours::black.withAlpha (0.45f), 60.0f, 0.0f, false);
+                g.setGradientFill (sg);
+                g.fillRect (44.0f, -50.0f, 18.0f, 100.0f);
             }
         }
 
-        // Sennheiser MD421-II: 200 mm, cesta frontal com frisos, corpo preto, anel de graves (5 posições)
+        // ---------------------------------------------------------------- Sennheiser MD 421-II
         void md421() const
         {
-            const juce::Colour basket (0xff2b2c30), body (0xff1f2023), ring (0xff707278);
-            juce::Path fr; fr.startNewSubPath (0.0f, -21.0f); fr.lineTo (72.0f, -25.0f); fr.lineTo (72.0f, 25.0f); fr.lineTo (0.0f, 21.0f); fr.closeSubPath();
-            fill (fr, 24.0f, basket, 0.40f);
-            lines (2.0f, 70.0f, 22.0f, 2.6f, juce::Colours::black.withAlpha (0.55f), true);           // frisos (fendas)
-            fill (section (72.0f, 25.0f, 76.0f, 25.0f), 25.0f, juce::Colour (0xff121214), 0.2f);
-            fill (section (76.0f, 24.0f, 168.0f, 22.0f), 24.0f, body, 0.40f);
-            // anel de graves com marcações
-            fill (section (138.0f, 23.0f, 152.0f, 23.0f, 1.5f), 23.0f, ring, 0.45f);
-            lines (139.0f, 151.0f, 23.0f, 2.4f, juce::Colours::black.withAlpha (0.35f), true);
-            // traseira e conector
-            fill (section (168.0f, 22.0f, 192.0f, 17.0f), 22.0f, body, 0.35f);
-            fill (section (192.0f, 15.0f, 200.0f, 14.0f, 1.5f), 15.0f, juce::Colour (0xff5d5f64), 0.5f);
-            // presilha (clip) integrada embaixo
-            juce::Path c; c.addRoundedRectangle (150.0f, 18.0f, 34.0f, 12.0f, 3.0f);
-            fill (c, 6.0f, juce::Colour (0xff17181a), 0.2f);
-            face (21.0f, basket, true, 2.2f);
+            const juce::Colour body (0xff1b1c1f), basket (0xff26272b), ring (0xff6f7279), clip (0xff141517);
+            // presilha (MZA 421) embaixo, perto da traseira
+            {
+                juce::Path c; c.addRoundedRectangle (150.0f, 14.0f, 46.0f, 16.0f, 4.0f);
+                if (shadow) fillShadowOnly (c);
+                else { shade (c, 8.0f, clip, 0.25f); edge (c, 0.06f); }
+            }
+            // corpo: afina da cesta (≈48 mm) para a traseira (≈32 mm)
+            auto bodyP = profile ({ { 80.0f, 23.5f }, { 150.0f, 21.5f }, { 196.0f, 19.0f }, { 210.0f, 16.0f }, { 215.0f, 14.0f } }, 3.0f);
+            shade (bodyP, 24.0f, body, 0.38f);
+            edge (bodyP, 0.08f);
+            // anel de graves (M ... S) com marcações
+            auto rr = profile ({ { 168.0f, 21.0f }, { 182.0f, 20.3f } }, 1.0f);
+            shade (rr, 21.0f, ring, 0.5f);
+            if (! shadow)
+            {
+                g.setColour (juce::Colours::black.withAlpha (0.45f));
+                for (float x = 169.0f; x < 182.0f; x += 1.6f) g.fillRect (x, -20.5f, 0.6f, 41.0f);
+                g.setColour (juce::Colours::white.withAlpha (0.7f));
+                for (int i = 0; i < 5; ++i) g.fillEllipse (154.0f + i * 2.6f - 0.6f, -1.0f - 16.0f, 1.2f, 1.2f);
+            }
+            // cesta frontal: um pouco mais larga, com fendas transversais
+            auto head = profile ({ { 0.0f, 20.0f }, { 3.0f, 23.0f }, { 74.0f, 25.0f }, { 80.0f, 24.5f } }, 4.0f);
+            shade (head, 25.0f, basket, 0.42f);
+            if (! shadow)
+            {
+                juce::Graphics::ScopedSaveState ss (g);
+                g.reduceClipRegion (head);
+                for (float x = 6.0f; x < 70.0f; x += 2.9f)
+                {
+                    g.setColour (juce::Colours::black.withAlpha (0.75f));
+                    g.fillRoundedRectangle (x, -19.0f, 1.5f, 38.0f, 0.7f);
+                    g.setColour (juce::Colours::white.withAlpha (0.07f));
+                    g.fillRect (x + 1.6f, -19.0f, 0.4f, 38.0f);
+                }
+                g.setColour (juce::Colours::black.withAlpha (0.6f));
+                g.fillRect (74.0f, -25.0f, 1.2f, 50.0f);
+            }
+            edge (head, 0.10f);
         }
     };
 }
@@ -426,14 +461,14 @@ void SpeakerView::paint (juce::Graphics& g)
     // escala real: o falante tem 12" (305 mm); mais longe da tela = mais perto de quem olha
     const float k = speakerRadius() * 2.0f / 305.0f * (1.0f + 0.22f * md);
     const float shadowOff = 5.0f + 30.0f * md;
-    const float faceF = 0.62f - 0.42f * juce::jlimit (0.0f, 1.0f, ang / 90.0f);
+    juce::ignoreUnused (ang);
     const auto xf = juce::AffineTransform::scale (k).rotated (-0.82f).translated (m);   // corpo sai para cima/direita
 
     auto drawMic = [&] (bool shadow)
     {
         juce::Graphics::ScopedSaveState ss (g);
         g.addTransform (shadow ? xf.translated (shadowOff, shadowOff) : xf);
-        MicPainter mp { g, shadow, faceF };
+        MicPainter mp { g, shadow };
         if (model == vlv::mics::SM7B) mp.sm7b();
         else if (model == vlv::mics::MD421) mp.md421();
         else mp.sm57();
@@ -442,7 +477,7 @@ void SpeakerView::paint (juce::Graphics& g)
     drawMic (false);
 
     // marca do ponto de captação
-    const float fr = (model == vlv::mics::SM7B ? 46.0f : (model == vlv::mics::MD421 ? 21.0f : 16.0f)) * k + 5.0f;
+    const float fr = (model == vlv::mics::SM7B ? 46.0f : (model == vlv::mics::MD421 ? 23.0f : 16.0f)) * k + 5.0f;
     g.setColour (accent.withAlpha (0.9f));
     g.drawEllipse (m.x - fr, m.y - fr, fr * 2.0f, fr * 2.0f, 1.6f);
 }
