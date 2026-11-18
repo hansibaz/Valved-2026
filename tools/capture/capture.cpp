@@ -3,6 +3,7 @@
 //   capture list   <plugin.dll>
 //   capture render <plugin.dll> <di.f32> <settings.txt> <saida_dir>
 // settings.txt: uma linha por take:  nome idx=valor idx=valor ...   (valores normalizados 0..1)
+#define NOMINMAX
 #include <windows.h>
 #include <cstdio>
 #include <cstdint>
