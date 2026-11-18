@@ -17,9 +17,9 @@ jobs:
       - name: Preparar plugin e sinal
         shell: bash
         env:
-          KEY: ${{ secrets.GERBERT_KEY }}
+          KEY: ${{ secrets.DZ_KEY }}
         run: |
-          if [ -z "$KEY" ]; then echo "Falta o segredo GERBERT_KEY"; exit 1; fi
+          if [ -z "$KEY" ]; then echo "Falta o segredo DZ_KEY"; exit 1; fi
           openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in tools/capture/gerbert.dll.enc -out gerbert.dll -pass env:KEY
           gunzip -c tools/capture/di.f32.gz > di.f32
       - name: Compilar host
