@@ -89,6 +89,9 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::greenMode, 1 }, "Green Drive Mode",
         StringArray { "TS808", "TS9" }, 0));
 
+    // ---- Ground filter (zumbido da rede + apito USB da interface)
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::groundFilter, 1 }, "Ground Filter", false));
+
     // ---- Qualidade (sobreamostragem): baixa / média / alta
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::quality, 1 }, "Quality",
         StringArray { "Low", "Medium", "High" }, 1, AudioParameterChoiceAttributes().withAutomatable (false)));
@@ -170,6 +173,7 @@ ValvedProcessor::ValvedProcessor()
     pMd421Bass   = apvts.getRawParameterValue (ParamID::md421Bass);
     pOutput    = apvts.getRawParameterValue (ParamID::output);
     pQuality = apvts.getRawParameterValue (ParamID::quality);
+    pGround = apvts.getRawParameterValue (ParamID::groundFilter);
     {
         const char* ids[] = { ParamID::ceOn, ParamID::ceMode, ParamID::ceLevel, ParamID::ceIntensity, ParamID::ceDepth, ParamID::ceRate };
         for (int k = 0; k < 6; ++k) pCe[k] = apvts.getRawParameterValue (ids[k]);
@@ -214,6 +218,8 @@ void ValvedProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     mono.setSize (1, juce::jmax (1, samplesPerBlock), false, true, false);
 
     gate.prepare (sampleRate);
+    groundFilter.setEnabled (pGround->load() > 0.5f);
+    groundFilter.prepare (sampleRate);
     shifter.prepare (sampleRate);
     gateGains.assign ((size_t) juce::jmax (1, samplesPerBlock), 1.0f);
     gateDelay.assign (1 << 13, 1.0f); gateDelayW = 0;
@@ -294,6 +300,8 @@ void ValvedProcessor::timerCallback()
         suspendProcessing (false);
     }
     if (prepared) refreshCab (false);
+    // análise do ground filter (~1x por segundo, fora do áudio)
+    if (prepared && ++groundTick >= 20) { groundTick = 0; groundFilter.analyse(); }
     // Informa à DAW o atraso (transpose, amp neural, filtros da qualidade alta): compensação automática
     int lat = shifter.getSemitones() != 0 ? shifter.getLatencySamples() : 0;
     if (activeEngine() == EngineNeural) lat += neuralAmp.getLatencySamples();
@@ -360,6 +368,9 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         inPeak = juce::jmax (inPeak, std::abs (m[i]));
     }
     inputMeter = juce::jmax (inPeak, inputMeter.load() * 0.8f);
+    // Ground filter: tira zumbido da rede e apito USB logo na entrada (antes de tudo)
+    groundFilter.setEnabled (pGround->load() > 0.5f);
+    groundFilter.process (m, n);
     if (tunerActive.load()) tunerFeed.push (m, n);   // afinador: guitarra limpa, antes de tudo
 
     // 3) Noise gate: detecta na guitarra limpa, mas só atenua depois do amp (estilo "Decimator"),
