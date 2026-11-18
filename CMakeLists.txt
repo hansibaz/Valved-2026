@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Valved VERSION 0.28.0)
+project(Valved VERSION 0.29.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -53,7 +53,18 @@ juce_add_binary_data(ValvedAssets SOURCES
     Resources/Fonts/RussoOne-Regular.ttf
     Resources/Fonts/MrsSaintDelafield-Regular.ttf
     Resources/Fonts/Michroma-Regular.ttf
-    Resources/Fonts/Cinzel.ttf)
+    Resources/Fonts/Cinzel.ttf
+    Resources/RecUI/rec_background.jpg
+    Resources/RecUI/rec_background_v2.jpg
+    Resources/RecUI/rec_knob.png
+    Resources/RecUI/rec_power_off.png
+    Resources/RecUI/rec_standby_off.png
+    Resources/RecUI/rec_led_off.png
+    Resources/BlockUI/block_background.jpg
+    Resources/BlockUI/block_knob_strip.png
+    Resources/BlockUI/block_power_off.png
+    Resources/BlockUI/block_standby_off.png
+    Resources/BlockUI/block_led_off.png)
 
 target_sources(Valved PRIVATE
     Source/PluginProcessor.cpp

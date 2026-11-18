@@ -284,7 +284,8 @@ private:
 };
 } // namespace nn
 
-// Os 4 amps neurais. Ordem igual à do plugin: 0 Clean 120, 1 Brit80, 2 51 Block, 3 Rec
+// Os amps neurais. Ordem igual à do plugin: 0 Clean 120, 1 Brit80, 2 51 Block, 3 Rec,
+// 4 = Rec "Version 2" (captura do canal Drive do Gerbert, com Power Amp e Low End).
 class NeuralAmp
 {
 public:
@@ -294,6 +295,7 @@ public:
         nets[1].load (neuraldata::brit80, neuraldata::brit80K);
         nets[2].load (neuraldata::block51, neuraldata::block51K);
         nets[3].load (neuraldata::rec, neuraldata::recK);
+        nets[4].load (neuraldata::recV2, neuraldata::recV2K);
     }
 
     void prepare (double sampleRate, int /*maxBlock*/, int quality = 1)
@@ -324,15 +326,16 @@ public:
     // Atraso total (em amostras da DAW) para compensação automática
     int getLatencySamples() const
     {
-        static const int modelDelay[4] = { neuraldata::clean120Delay, neuraldata::brit80Delay, neuraldata::block51Delay, neuraldata::recDelay };
+        static const int modelDelay[5] = { neuraldata::clean120Delay, neuraldata::brit80Delay, neuraldata::block51Delay, neuraldata::recDelay, neuraldata::recV2Delay };
         const double md = modelDelay[model] * fs / 48000.0;
         return (int) std::lround (md) + (resampling ? prefill() : 0);
     }
 
     // Knobs na escala 0..10, na ordem do plugin
-    void setParameters (int newModel, float gain, float bass, float mid, float treble, float presence, float master, float resonance)
+    void setParameters (int newModel, float gain, float bass, float mid, float treble, float presence, float master, float resonance,
+                        float powerAmp = 3.0f)
     {
-        newModel = std::clamp (newModel, 0, 3);
+        newModel = std::clamp (newModel, 0, 4);
         if (newModel != model)
         {
             model = newModel;
@@ -357,6 +360,12 @@ public:
                 k[0] = enc (gain); k[1] = enc (bass); k[2] = enc (mid); k[3] = enc (treble); k[4] = enc (presence); k[5] = enc (resonance); k[6] = enc (master);
                 fade = std::min (1.0f, gain / 0.5f);
                 break;
+            case 4:  // Rec V2 (Gerbert Drive): Gain, Bass, Middle, Treble, Power Amp, Low End, Presence; Master = volume
+                k[0] = enc (gain); k[1] = enc (bass); k[2] = enc (mid); k[3] = enc (treble);
+                k[4] = enc (powerAmp); k[5] = enc (resonance); k[6] = enc (presence);
+                fade = std::min (1.0f, gain / 0.5f);
+                post = std::max (master, 0.0f) / 5.0f;                         // Master: volume (dobra = +6 dB)
+                break;
             default: // Mesa: Gain, Bass, Mid, Treble, Presence, Master
                 k[0] = enc (gain); k[1] = enc (bass); k[2] = enc (mid); k[3] = enc (treble); k[4] = enc (presence); k[5] = enc (master);
                 fade = std::min (1.0f, gain / 0.5f);
@@ -378,7 +387,7 @@ public:
     }
 
     // Nivelamento de volume entre os amps (dB), medido com o sinal de treino e knobs no meio
-    static constexpr float trimDb[4] = { -4.1f, 6.4f, -0.7f, -4.6f };   // Clean 120 baixado 5,5 dB (estava bem mais alto que os outros)   // = nível do motor de circuito (RMS, sinal de treino)
+    static constexpr float trimDb[5] = { -4.1f, 6.4f, -0.7f, -4.6f, 0.0f };   // Clean 120 baixado 5,5 dB (estava bem mais alto que os outros)   // = nível do motor de circuito (RMS, sinal de treino)
 
 private:
     int prefill() const { return up.halfWidth() + (int) std::ceil (down.halfWidth() * fs / 48000.0) + 4; }
@@ -441,7 +450,7 @@ private:
         outGain = targetGain;
     }
 
-    nn::WaveNet nets[4];
+    nn::WaveNet nets[5];
     nn::Resampler up, down;
     std::vector<float> x48, y48, tmp, fifo;
     long long fifoR = 0, fifoW = 0;

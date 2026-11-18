@@ -28,7 +28,10 @@ namespace ParamID
     inline constexpr const char* presence  = "presence";
     inline constexpr const char* master    = "master";
     inline constexpr const char* resonance = "resonance";
-    inline constexpr const char* engine    = "engine";      // motor do amp: 0 Circuit, 1 Neural
+    inline constexpr const char* engine    = "engine";      // motor do amp: 0 Circuit, 1 Neural, 2 Version 2 (só no Rec)
+    inline constexpr const char* powerAmp  = "poweramp";    // Rec V2: Power Amp
+    inline constexpr const char* ampPower   = "ampPower";   // chave POWER do amp (desligado = sem som)
+    inline constexpr const char* ampStandby = "ampStandby"; // chave STANDBY (para baixo = válvulas quentes, sem som)
 
     // Cada amp guarda a própria regulagem: "a0_gain", "a1_gain", ...
     inline juce::String ampKnob (int model, const char* knob) { return "a" + juce::String (model) + "_" + knob; }
@@ -158,10 +161,14 @@ private:
     juce::SmoothedValue<float> levelMatch { 1.0f };   // volume igual entre amps + mesma curva do Master
     vlv::OutputLimiter limiter;                       // teto de -1 dBFS na saída
     juce::SmoothedValue<float> tunerGain { 1.0f };    // mudo do afinador sem estalo
+    juce::SmoothedValue<float> ampOnGain { 1.0f };    // POWER / STANDBY
+    std::atomic<float>* pAmpPower = nullptr; std::atomic<float>* pAmpStandby = nullptr;
     int lastEngine = -1;
 public:
-    enum Engine { EngineCircuit = 0, EngineNeural = 1 };
-    int activeEngine() const { return (int) pEngine->load(); }
+    enum Engine { EngineCircuit = 0, EngineNeural = 1, EngineV2 = 2 };
+    // Version 2 só existe no Rec; nos outros amps vale como Neural
+    int activeEngine() const { const int e = (int) pEngine->load(); return (e == EngineV2 && (int) pAmp->load() != 3) ? EngineNeural : e; }
+    static constexpr int RecV2Slot = 4;   // knobs próprios do Rec V2 ("a4_...")
 private:
     vlv::pedal::EnsembleChorus ensemble;
     std::atomic<float>* pQuality = nullptr;
@@ -192,7 +199,7 @@ private:
     std::atomic<float>* pCe[6];
     std::atomic<float>* pResonance;
     std::atomic<float>* pEngine;
-    std::atomic<float>* pAmpKnob[4][7] {};   // [amp][gain, bass, mid, treble, presence, master, resonance]
+    std::atomic<float>* pAmpKnob[5][8] {};   // [amp][gain, bass, mid, treble, presence, master, resonance, poweramp]; amp 4 = Rec V2
     std::atomic<float>* pPedal[4][4];   // [pedal][on, drive, tone, level]
     std::atomic<float>* pDly[10];
     std::atomic<float>* pComp[5];   // on, sustain, level, attack, clip

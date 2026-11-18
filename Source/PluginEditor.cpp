@@ -126,9 +126,10 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
 
     // Motor do amp: CIRCUIT (primeira versão) e NEURAL (capturas dos amps reais)
     {
-        const juce::StringArray en { "CIRCUIT", "NEURAL" };
+        const juce::StringArray en { "CIRCUIT", "NEURAL", "VERSION 2" };
         const juce::StringArray tips { "First version: circuit model",
-                                       "Neural: captures of the real amps" };
+                                       "Neural: captures of the real amps",
+                                       "Rec only: Version 2 (with Power Amp and Low End)" };
         for (int i = 0; i < en.size(); ++i)
         {
             auto* b = engineButtons.add (new juce::TextButton (en[i]));
@@ -147,6 +148,7 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
     }
 
     addAndMakeVisible (head);
+    head.toBack();   // os botões de amp/motor ficam por cima da foto do amp
     addChildComponent (cabPage);
     addChildComponent (pedalsPage);
     addChildComponent (fxPage);
@@ -195,17 +197,35 @@ juce::String ValvedEditor::tuningName (int semis)
     return juce::String (notes[idx]) + " Standard  (" + amount + (semis < 0 ? " down)" : " up)");
 }
 
+// Amps com foto (REC): a imagem ocupa a área toda e os botões ficam por cima dela.
+// Amps desenhados: ficam abaixo da fileira de botões, como antes.
+void ValvedEditor::layoutHead()
+{
+    if (head.isImageAmp()) head.setBounds (mainArea);
+    else head.setBounds (mainArea.withTrimmedTop (56).reduced (10, 4));
+    for (auto* b : ampButtons) b->toFront (false);
+    for (auto* b : engineButtons) b->toFront (false);
+}
+
 void ValvedEditor::timerCallback()
 {
     const int ampIdx = (int) proc.apvts.getRawParameterValue (ParamID::amp)->load();
     for (int i = 0; i < ampButtons.size(); ++i)
         ampButtons[i]->setToggleState (i == ampIdx, juce::dontSendNotification);
     {
-        const int eng = (int) proc.apvts.getRawParameterValue (ParamID::engine)->load();
+        int eng = (int) proc.apvts.getRawParameterValue (ParamID::engine)->load();
+        const bool isRec = ampIdx == 3;
+        if (eng == 2 && ! isRec) eng = 1;                        // Version 2 só no Rec (nos outros vale Neural)
         for (int i = 0; i < engineButtons.size(); ++i)
             engineButtons[i]->setToggleState (i == eng, juce::dontSendNotification);
+        if (engineButtons.size() > 2)
+        {
+            engineButtons[2]->setEnabled (isRec);
+            engineButtons[2]->setAlpha (isRec ? 1.0f : 0.35f);
+        }
+        const int hm = isRec && eng == 2 ? 4 : ampIdx;
+        if (hm != head.getModel()) { head.setModel (hm); layoutHead(); }
     }
-    head.setModel (ampIdx);
     head.refreshState();
 
     const int semis = (int) std::lround (proc.apvts.getRawParameterValue (ParamID::transpose)->load());
@@ -242,7 +262,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.28", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.29", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawText ("QUALITY", qualityLabelArea, juce::Justification::centredRight);
 
@@ -296,11 +316,11 @@ void ValvedEditor::resized()
     // Página AMP
     auto m = mainArea;
     // amps (4 x 130) + espaço + motores (2 x 104)
-    auto sel = m.removeFromTop (56).withSizeKeepingCentre (4 * 130 + 3 * 8 + 28 + 2 * 104 + 6, 34).translated (0, 6);
-    for (auto* b : ampButtons) { b->setBounds (sel.removeFromLeft (130)); sel.removeFromLeft (8); }
-    sel.removeFromLeft (20);
-    for (auto* b : engineButtons) { b->setBounds (sel.removeFromLeft (104)); sel.removeFromLeft (6); }
-    head.setBounds (m.reduced (10, 4));
+    auto sel = m.removeFromTop (56).withSizeKeepingCentre (4 * 120 + 3 * 8 + 20 + 3 * 100 + 2 * 6, 34).translated (0, 6);
+    for (auto* b : ampButtons) { b->setBounds (sel.removeFromLeft (120)); sel.removeFromLeft (8); }
+    sel.removeFromLeft (12);
+    for (auto* b : engineButtons) { b->setBounds (sel.removeFromLeft (100)); sel.removeFromLeft (6); }
+    layoutHead();
 
     // Página CAB
     cabPage.setBounds (mainArea.withTrimmedTop (16));

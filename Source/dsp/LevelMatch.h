@@ -29,8 +29,12 @@ struct LevelMatch
     static constexpr float targetLufs = -18.0f;
 
     // Ganho (linear) a aplicar depois do amp
+    // Rec V2: o Master já é volume puro (dobra = +6 dB); só falta acertar o nível no Master 5
+    static constexpr float recV2AtMaster5 = -24.7f;   // medido (LUFS), relativo ao Rec Neural no mesmo sinal
+
     static float gain (int engine, int amp, float master)
     {
+        if (engine == 2) return std::pow (10.0f, (targetLufs - recV2AtMaster5) / 20.0f);
         engine = std::clamp (engine, 0, 1); amp = std::clamp (amp, 0, 3);
         const float m = std::clamp (master, 0.0f, 10.0f);
         const float* t = measured[engine][amp];

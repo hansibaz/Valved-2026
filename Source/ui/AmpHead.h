@@ -13,6 +13,7 @@ public:
 
     void setModel (int model);
     int getModel() const { return model; }
+    bool isImageAmp() const { return imageMode(); }
     void refreshState();   // chamado pelo timer
 
     void paint (juce::Graphics&) override;
@@ -63,6 +64,34 @@ private:
     juce::Slider* findSlider (const juce::String& id);
     static juce::String fullId (int model, const char* base);
     ToggleSwitch* findSwitch (const juce::String& id);
+
+    // Amps com a interface em imagem (UI kits do 51 BLOCK e do REC): foto + knobs/chaves interativos
+    bool imageMode() const { return model == 2 || model == 3 || model == 4; }   // 51 Block, REC e REC Version 2
+public:
+    struct ImageSpec
+    {
+        float w, h, anchorY;                 // tamanho da foto e onde cortar (0 = só embaixo, 1 = só em cima)
+        const float* knobX; const float* knobY; int numKnobs; float knobSize;
+        juce::Point<float> power, standby, led;   // centros
+        juce::Point<float> toggleSize; float ledSize;
+    };
+private:
+    const ImageSpec& spec() const;
+    juce::Rectangle<float> imageRect() const;
+    juce::Point<float> fromImage (float x, float y) const;
+    juce::Rectangle<int> imageBox (float cx, float cy, float w, float h) const;
+    struct RecToggle : public juce::Button
+    {
+        RecToggle();
+        void paintButton (juce::Graphics&, bool, bool) override;
+        juce::Image offImg;
+    };
+    void refreshImageAssets();
+    std::unique_ptr<RecToggle> recPower, recStandby;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> recPowerAtt, recStandbyAtt;
+    juce::Image recBg, recBgV2, recLedOff;
+    juce::Image blockBg, blockLedOff, recPowerOff, recStandbyOff, blockPowerOff, blockStandbyOff;
+    bool powerShown = true;
 
     juce::Image cache;
     int cacheModel = -1;

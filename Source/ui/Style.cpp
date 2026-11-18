@@ -290,6 +290,46 @@ void ValvedLook::drawAmpKnob (juce::Graphics& g, juce::Rectangle<float> r, float
     }
 }
 
+// Knob do REC (UI em imagem): a foto do knob de GAIN, sem o ponteiro, fica parada (a luz do
+// estúdio não gira); só a marcação gira, desenhada por cima como um risco gravado no topo do knob.
+void ValvedLook::drawRecImageKnob (juce::Graphics& g, juce::Rectangle<float> r, float angle)
+{
+    static const juce::Image img = juce::ImageCache::getFromMemory (BinaryData::rec_knob_png, BinaryData::rec_knob_pngSize);
+    g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+    g.drawImage (img, r, juce::RectanglePlacement::stretchToFit);
+    // a imagem cobre 70 px da foto original; o topo (cone) tem ~23,5 px de raio, levemente
+    // achatado pela perspectiva, com o centro 0,7 px à esquerda e 2,7 px acima do centro do saiote
+    const float k = r.getWidth() / 70.0f;
+    const juce::Point<float> c (r.getCentreX() - 0.7f * k, r.getCentreY() - 2.7f * k);
+    const float sx = std::sin (angle), sy = -std::cos (angle) * 0.96f;
+    const juce::Point<float> a (c.x + sx * 2.0f * k, c.y + sy * 2.0f * k), b (c.x + sx * 22.5f * k, c.y + sy * 22.5f * k);
+    juce::Path line; line.startNewSubPath (a); line.lineTo (b);
+    g.setColour (juce::Colours::white.withAlpha (0.28f));                     // brilho da borda do risco
+    g.strokePath (line, juce::PathStrokeType (2.6f * k, juce::PathStrokeType::curved, juce::PathStrokeType::rounded),
+                  juce::AffineTransform::translation (0.45f * k, 0.55f * k));
+    g.setColour (juce::Colour (0xf0141010));                                  // risco gravado
+    g.strokePath (line, juce::PathStrokeType (2.3f * k, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+}
+
+// Knob do 51 Block (UI em imagem): "chicken head" preto renderizado em 3D em 48 posições
+// (a cada 7,5°, com a luz do estúdio parada); usa o quadro mais próximo e gira só a diferença.
+// Cada quadro tem 200 px e cobre 100 px da foto; a sombra no painel já vem no quadro.
+void ValvedLook::drawBlockImageKnob (juce::Graphics& g, juce::Rectangle<float> r, float angle)
+{
+    static const juce::Image strip = juce::ImageCache::getFromMemory (BinaryData::block_knob_strip_png, BinaryData::block_knob_strip_pngSize);
+    constexpr int frames = 48, cols = 8, fs = 200;
+    const float twoPi = juce::MathConstants<float>::twoPi;
+    float a = std::fmod (angle, twoPi); if (a < 0) a += twoPi;
+    const float step = twoPi / (float) frames;
+    const int idx = juce::roundToInt (a / step) % frames;
+    const float rest = a - (float) idx * step;
+    const auto frame = strip.getClippedImage ({ (idx % cols) * fs, (idx / cols) * fs, fs, fs });
+    const float sc = r.getWidth() / (float) fs;
+    g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+    g.drawImageTransformed (frame, juce::AffineTransform::rotation (rest, fs * 0.5f, fs * 0.5f)
+                                      .scaled (sc).translated (r.getX(), r.getY()));
+}
+
 void ValvedLook::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos,
                                    float startAngle, float endAngle, juce::Slider& s)
 {
@@ -297,6 +337,10 @@ void ValvedLook::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h
     auto r = juce::Rectangle<int> (x, y, w, h).toFloat();
     if (style == KnobModern)
         drawModernKnob (g, r, pos, startAngle, endAngle);
+    else if (style == KnobRecImage)
+        drawRecImageKnob (g, r, startAngle + pos * (endAngle - startAngle));
+    else if (style == KnobBlockImage)
+        drawBlockImageKnob (g, r, startAngle + pos * (endAngle - startAngle));
     else
     {
         const float d = juce::jmin (r.getWidth(), r.getHeight());

@@ -42,6 +42,7 @@ public:
     enum Page { PagePedals = 0, PageAmp, PageCab, PageFx };
     void showPage (int page);
     void refreshNow() { timerCallback(); }
+    void layoutHead();
 
 private:
     void timerCallback() override;

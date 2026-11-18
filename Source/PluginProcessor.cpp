@@ -35,7 +35,7 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
     StringArray ampNames;
     for (auto* nm : vlv::ampNames()) ampNames.add (nm);
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::amp, 1 }, "Amp", ampNames, 1));
-    p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::engine, 1 }, "Amp Engine", StringArray { "Circuit", "Neural" }, 1));
+    p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::engine, 1 }, "Amp Engine", StringArray { "Circuit", "Neural", "Version 2" }, 1));
 
     // Regulagem própria de cada amp (todos começam com os knobs no meio)
     for (int m = 0; m < 4; ++m)
@@ -52,6 +52,17 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
                 AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (v, 1); })));
         }
     }
+    // Rec Version 2 (captura do Gerbert Drive): knobs próprios, padrões iguais aos do original
+    {
+        static const char* knobs[] = { ParamID::gain, ParamID::bass, ParamID::mid, ParamID::treble, ParamID::presence, ParamID::master, ParamID::resonance, ParamID::powerAmp };
+        static const char* names[] = { "Gain", "Bass", "Middle", "Treble", "Presence", "Master", "Low End", "Power Amp" };
+        for (int k = 0; k < 8; ++k)
+            p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamID::ampKnob (4, knobs[k]), 1 }, String ("Rec V2 ") + names[k],
+                NormalisableRange<float> (0.0f, 10.0f, 0.01f), k == 7 ? 3.0f : 5.0f,
+                AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (v, 1); })));
+    }
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::ampPower, 1 }, "Amp Power", true));
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::ampStandby, 1 }, "Amp Standby (On = Play)", true));
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::cabOn, 1 }, "Cab On", true));
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::cab, 1 }, "Cabinet", vlv::getCabNames(), 0));
     p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamID::micX, 1 }, "Mic Position",
@@ -171,10 +182,10 @@ ValvedProcessor::ValvedProcessor()
     pTranspose = apvts.getRawParameterValue (ParamID::transpose);
     pAmp       = apvts.getRawParameterValue (ParamID::amp);
     pEngine    = apvts.getRawParameterValue (ParamID::engine);
-    for (int m = 0; m < 4; ++m)
+    for (int m = 0; m < 5; ++m)
     {
-        const char* knobs[] = { ParamID::gain, ParamID::bass, ParamID::mid, ParamID::treble, ParamID::presence, ParamID::master, ParamID::resonance };
-        for (int k = 0; k < 7; ++k)
+        const char* knobs[] = { ParamID::gain, ParamID::bass, ParamID::mid, ParamID::treble, ParamID::presence, ParamID::master, ParamID::resonance, ParamID::powerAmp };
+        for (int k = 0; k < 8; ++k)
             pAmpKnob[m][k] = apvts.getRawParameterValue (ParamID::ampKnob (m, knobs[k]));   // nullptr se o amp não tem o knob
     }
     pCabOn     = apvts.getRawParameterValue (ParamID::cabOn);
@@ -188,6 +199,8 @@ ValvedProcessor::ValvedProcessor()
     pMd421Bass   = apvts.getRawParameterValue (ParamID::md421Bass);
     pOutput    = apvts.getRawParameterValue (ParamID::output);
     pQuality = apvts.getRawParameterValue (ParamID::quality);
+    pAmpPower = apvts.getRawParameterValue (ParamID::ampPower);
+    pAmpStandby = apvts.getRawParameterValue (ParamID::ampStandby);
     pEqOn = apvts.getRawParameterValue (ParamID::eqOn);
     pEqMode = apvts.getRawParameterValue (ParamID::eqMode);
     pEqLevel = apvts.getRawParameterValue (ParamID::eqLevel);
@@ -262,6 +275,7 @@ void ValvedProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     limiter.prepare (sampleRate);
     tunerFeed.sampleRate = sampleRate;
     tunerGain.reset (sampleRate, 0.02);
+    ampOnGain.reset (sampleRate, 0.12);
     inGain.setCurrentAndTargetValue (vlv::dbToGain (pInput->load()));
     outGain.setCurrentAndTargetValue (vlv::dbToGain (pOutput->load()));
 
@@ -320,7 +334,7 @@ void ValvedProcessor::timerCallback()
     if (prepared) refreshCab (false);
     // Informa à DAW o atraso (transpose, amp neural, filtros da qualidade alta): compensação automática
     int lat = shifter.getSemitones() != 0 ? shifter.getLatencySamples() : 0;
-    if (activeEngine() == EngineNeural) lat += neuralAmp.getLatencySamples();
+    if (activeEngine() != EngineCircuit) lat += neuralAmp.getLatencySamples();
     else lat += amp.getLatencySamples();
     if (lat != getLatencySamples()) setLatencySamples (lat);
 }
@@ -420,20 +434,22 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 
     vlv::AmpModel::Settings st;
     st.model = juce::jlimit (0, 3, (int) pAmp->load());
-    auto knobVal = [this, &st] (int k) { auto* p = pAmpKnob[st.model][k]; return p != nullptr ? p->load() : 5.0f; };
+    const int eng = activeEngine();
+    const int slot = eng == EngineV2 ? RecV2Slot : st.model;           // Rec V2 tem knobs próprios
+    auto knobVal = [this, slot] (int k) { auto* p = pAmpKnob[slot][k]; return p != nullptr ? p->load() : 5.0f; };
     st.gain = knobVal (0); st.bass = knobVal (1); st.mid = knobVal (2); st.treble = knobVal (3);
     st.presence = knobVal (4); st.master = knobVal (5); st.resonance = knobVal (6);
-    const int eng = activeEngine();
+    const float powerAmp = pAmpKnob[RecV2Slot][7] != nullptr ? pAmpKnob[RecV2Slot][7]->load() : 3.0f;
     if (eng != lastEngine)
     {
         // troca de motor: começa do zero para não estalar com estado antigo
-        if (eng == EngineNeural) neuralAmp.reset();
+        if (eng != EngineCircuit) neuralAmp.reset();
         else amp.reset();
         lastEngine = eng;
     }
-    if (eng == EngineNeural)
+    if (eng != EngineCircuit)
     {
-        neuralAmp.setParameters (st.model, st.gain, st.bass, st.mid, st.treble, st.presence, st.master, st.resonance);
+        neuralAmp.setParameters (eng == EngineV2 ? 4 : st.model, st.gain, st.bass, st.mid, st.treble, st.presence, st.master, st.resonance, powerAmp);
         neuralAmp.process (m, n);
     }
     else
@@ -504,6 +520,15 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     }
     // 10) Limitador: o mesmo teto (-1 dBFS) para todos, a saída nunca clipa
     limiter.process (L, R, n);
+    // 10b) POWER / STANDBY do amp: desligado ou em standby = sem som (com rampa, sem estalo)
+    ampOnGain.setTargetValue (pAmpPower->load() > 0.5f && pAmpStandby->load() > 0.5f ? 1.0f : 0.0f);
+    if (ampOnGain.isSmoothing() || ampOnGain.getTargetValue() < 0.5f)
+        for (int i = 0; i < n; ++i)
+        {
+            const float g = ampOnGain.getNextValue();
+            L[i] *= g;
+            if (R != nullptr) R[i] *= g;
+        }
     // 11) Mudo do afinador (afinar em silêncio)
     tunerGain.setTargetValue (tunerActive.load() && tunerMute.load() ? 0.0f : 1.0f);
     if (tunerGain.isSmoothing() || tunerGain.getTargetValue() < 0.5f)
