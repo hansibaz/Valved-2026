@@ -61,6 +61,44 @@ private:
     double lastTapMs = 0.0;
 };
 
+// Fader vertical do EQ gráfico (com capa iluminada, como os sliders de EQ dos amps)
+class EqFader : public juce::Slider
+{
+public:
+    explicit EqFader (juce::Colour c) : led (c)
+    {
+        setSliderStyle (juce::Slider::LinearVertical);
+        setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+        setPopupDisplayEnabled (true, true, nullptr);
+        setMouseDragSensitivity (200);
+    }
+    void paint (juce::Graphics&) override;
+    juce::Colour led;
+};
+
+// Pedal de EQ gráfico (post FX): VALVED 7 bandas ou MARK 5 bandas
+class EqUnit : public juce::Component
+{
+public:
+    explicit EqUnit (ValvedProcessor& p);
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    void refresh();
+private:
+    void renderBody();
+    ValvedProcessor& proc;
+    juce::OwnedArray<EqFader> vFaders, mFaders;
+    EqFader level { juce::Colour (0xffffffff) };
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> att;
+    juce::TextButton modeV { "VALVED" }, modeM { "MARK" };
+    FootSwitch onSwitch;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> onAtt;
+    juce::Image body;
+    juce::Rectangle<float> faderArea;
+    int mode = 0;
+    bool onState = false;
+};
+
 class FxPage : public juce::Component
 {
 public:
@@ -69,5 +107,6 @@ public:
     void resized() override;
     void refresh();
 private:
+    EqUnit eqUnit;
     FxUnit delayUnit, reverbUnit;
 };

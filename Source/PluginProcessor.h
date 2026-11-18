@@ -13,6 +13,7 @@
 #include "dsp/Reverb.h"
 #include "dsp/Tuner.h"
 #include "dsp/ChorusPedal.h"
+#include "dsp/GraphicEq.h"
 
 namespace ParamID
 {
@@ -50,7 +51,11 @@ namespace ParamID
     }
 
     inline constexpr const char* greenMode   = "greenMode";    // TS808 / TS9
-    inline constexpr const char* quality     = "quality";      // 0 baixa, 1 média, 2 alta
+    inline constexpr const char* quality     = "quality";
+    inline constexpr const char* eqOn        = "eqOn";         // pedal de EQ (post FX)
+    inline constexpr const char* eqMode      = "eqMode";       // 0 VALVED (7 bandas), 1 MARK (5 bandas)
+    inline constexpr const char* eqLevel     = "eqLevel";
+    inline juce::String eqBand (int mode, int band) { return juce::String (mode == 1 ? "eqM" : "eqV") + juce::String (band); }      // 0 baixa, 1 média, 2 alta
     inline constexpr const char* ceOn        = "ceOn";         // pedal de chorus (Ensemble, CE-1)
     inline constexpr const char* ceMode      = "ceMode";       // 0 chorus, 1 vibrato
     inline constexpr const char* ceLevel     = "ceLevel";
@@ -160,6 +165,9 @@ public:
 private:
     vlv::pedal::EnsembleChorus ensemble;
     std::atomic<float>* pQuality = nullptr;
+    std::atomic<float>* pEqOn = nullptr; std::atomic<float>* pEqMode = nullptr; std::atomic<float>* pEqLevel = nullptr;
+    std::atomic<float>* pEqV[7] {}; std::atomic<float>* pEqM[5] {};
+    vlv::GraphicEq graphicEq;
 
 
     int appliedQuality = 1;

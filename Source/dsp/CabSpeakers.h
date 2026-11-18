@@ -184,6 +184,47 @@ inline double conePositionDb (double f, double micX)
     return db;
 }
 
+// ---------------------------------------------------------------------------------
+// Caixa 4x12 "Oversized" de fundo fechado (no estilo das 4x12 Oversized da Mesa):
+// 32 7/8" x 30 1/8" x 14 1/4", bétula, fundo fechado, falantes montados por trás do baffle,
+// tela de juta revestida. As curvas da Celestion são medidas num baffle aberto (sem caixa);
+// aqui o falante passa a "morar" dentro da caixa:
+//  1) Ar preso na caixa fechada: a ressonância sobe (fc = Fs·√(1+Vas/Vb)) e fica mais marcada
+//     (Qtc = Qts·√(1+Vas/Vb)) — é o "soco" (thump) de 100-120 Hz das 4x12.
+//     Volume interno ~155 L (≈39 L por falante).
+//  2) Os outros três falantes somam nos graves (onde o comprimento de onda é maior que a caixa).
+//  3) Ondas estacionárias internas: altura (~215 Hz), largura (~236 Hz) e profundidade (~570 Hz).
+//  4) A tela de juta revestida suaviza um pouco o agudo.
+// Parâmetros dos falantes (Fs da ficha; Qts e Vas típicos de falantes de guitarra de 12").
+inline double hp2Db (double f, double f0, double q)
+{
+    const double r = f / f0, r2 = r * r;
+    const double re = 1.0 - r2, im = r / q;
+    return 20.0 * std::log10 (r2 / std::sqrt (re * re + im * im));
+}
+inline double peakDb (double f, double f0, double q, double gainDb)
+{
+    const double x = q * (f / f0 - f0 / f);
+    return gainDb / (1.0 + x * x);
+}
+inline double oversizedBoxDb (int model, double f)
+{
+    double fs = 75.0, qts = 0.85;                         // Vintage 30
+    if (model == Greenback) { fs = 75.0; qts = 1.05; }
+    else if (model == G12T75) { fs = 85.0; qts = 0.80; }
+    const double alpha = 1.0;                             // Vas/Vb na caixa grande (numa 4x12 comum fica ~1,5)
+    const double k = std::sqrt (1.0 + alpha);
+    const double fc = fs * k, qtc = std::min (1.3, qts * k);
+    double db = hp2Db (f, fc, qtc) - hp2Db (f, fs, qts);  // da curva em baffle aberto para a caixa fechada
+    // soma dos 4 falantes nos graves (+2 dB abaixo de ~250 Hz, suave)
+    db += 2.0 * (1.0 - smoothStepLog (f, 150.0, 450.0));
+    // modos internos da caixa
+    db += peakDb (f, 215.0, 5.0, 1.0) + peakDb (f, 236.0, 5.0, 0.9) + peakDb (f, 572.0, 4.0, 1.3) + peakDb (f, 1144.0, 6.0, -0.8);
+    // tela de juta revestida
+    db -= 1.8 * smoothStepLog (f, 3000.0, 12000.0);
+    return db;
+}
+
 inline void fft (std::vector<std::complex<double>>& a, bool inverse)
 {
     const size_t n = a.size();
@@ -223,7 +264,7 @@ inline std::vector<float> makeIR (int model, double fs, int length, double micX,
     {
         const double f = std::max (1.0, (double) k * fs / (double) N);
         double db = curveDb (model, f) - 100.0 + conePositionDb (f, micX) - conePositionDb (f, refX)
-                  + mics::responseDb (mic, f);
+                  + mics::responseDb (mic, f) + oversizedBoxDb (model, f);
         if (f > 20000.0) db -= 24.0 * std::log2 (f / 20000.0);    // acima do gráfico: cai 24 dB/oitava
         const double lnMag = db * std::log (10.0) / 20.0;
         spec[k] = lnMag;

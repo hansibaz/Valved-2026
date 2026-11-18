@@ -89,6 +89,24 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::greenMode, 1 }, "Green Drive Mode",
         StringArray { "TS808", "TS9" }, 0));
 
+    // ---- Pedal de EQ (post FX): VALVED 7 bandas / MARK 5 bandas
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::eqOn, 1 }, "EQ On", false));
+    p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::eqMode, 1 }, "EQ Mode", StringArray { "Valved 7-Band", "Mark 5-Band" }, 0));
+    {
+        auto dbAttr = AudioParameterFloatAttributes().withLabel ("dB")
+                          .withStringFromValueFunction ([] (float v, int) { return (v > 0 ? "+" : "") + String (v, 1) + " dB"; });
+        const char* vNames[7] = { "80 Hz", "200 Hz", "400 Hz", "800 Hz", "1.6 kHz", "3.2 kHz", "6.4 kHz" };
+        const char* mNames[5] = { "80 Hz", "240 Hz", "750 Hz", "2.2 kHz", "6.6 kHz" };
+        for (int b = 0; b < 7; ++b)
+            p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamID::eqBand (0, b), 1 }, String ("EQ Valved ") + vNames[b],
+                                                                NormalisableRange<float> (-12.0f, 12.0f, 0.1f), 0.0f, dbAttr));
+        for (int b = 0; b < 5; ++b)
+            p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamID::eqBand (1, b), 1 }, String ("EQ Mark ") + mNames[b],
+                                                                NormalisableRange<float> (-12.0f, 12.0f, 0.1f), 0.0f, dbAttr));
+        p.push_back (std::make_unique<AudioParameterFloat> (ParameterID { ParamID::eqLevel, 1 }, "EQ Level",
+                                                            NormalisableRange<float> (-12.0f, 12.0f, 0.1f), 0.0f, dbAttr));
+    }
+
     // ---- Qualidade (sobreamostragem): baixa / média / alta
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::quality, 1 }, "Quality",
         StringArray { "Low", "Medium", "High" }, 1, AudioParameterChoiceAttributes().withAutomatable (false)));
@@ -170,6 +188,11 @@ ValvedProcessor::ValvedProcessor()
     pMd421Bass   = apvts.getRawParameterValue (ParamID::md421Bass);
     pOutput    = apvts.getRawParameterValue (ParamID::output);
     pQuality = apvts.getRawParameterValue (ParamID::quality);
+    pEqOn = apvts.getRawParameterValue (ParamID::eqOn);
+    pEqMode = apvts.getRawParameterValue (ParamID::eqMode);
+    pEqLevel = apvts.getRawParameterValue (ParamID::eqLevel);
+    for (int b = 0; b < 7; ++b) pEqV[b] = apvts.getRawParameterValue (ParamID::eqBand (0, b));
+    for (int b = 0; b < 5; ++b) pEqM[b] = apvts.getRawParameterValue (ParamID::eqBand (1, b));
     {
         const char* ids[] = { ParamID::ceOn, ParamID::ceMode, ParamID::ceLevel, ParamID::ceIntensity, ParamID::ceDepth, ParamID::ceRate };
         for (int k = 0; k < 6; ++k) pCe[k] = apvts.getRawParameterValue (ids[k]);
@@ -227,6 +250,7 @@ void ValvedProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     compressor.prepare (sampleRate, samplesPerBlock, appliedQuality);
     delay.prepare (sampleRate);
     reverb.prepare (sampleRate);
+    graphicEq.prepare (sampleRate);
 
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) juce::jmax (1, samplesPerBlock),
                                   (juce::uint32) juce::jmax (1, getTotalNumOutputChannels()) };
@@ -441,7 +465,7 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         cab.process (sub);
     }
 
-    // 8) Delay e reverb (estéreo, depois do gabinete)
+    // 8) EQ, delay e reverb (estéreo, depois do gabinete)
     if (auto* ph = getPlayHead())
         if (auto pos = ph->getPosition())
             if (auto b = pos->getBpm())
@@ -449,6 +473,12 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     {
         float* Lp = buffer.getWritePointer (0);
         float* Rp = numOut > 1 ? buffer.getWritePointer (1) : nullptr;
+        // EQ gráfico (pedal post FX), antes do delay e do reverb
+        vlv::GraphicEq::Settings es;
+        es.on = pEqOn->load() > 0.5f; es.mode = (int) pEqMode->load(); es.levelDb = pEqLevel->load();
+        for (int b = 0; b < vlv::GraphicEq::numBands (es.mode); ++b) es.gainDb[(size_t) b] = (es.mode == 1 ? pEqM[b] : pEqV[b])->load();
+        graphicEq.process (Lp, Rp, n, es);
+
         vlv::StereoDelay::Settings ds;
         ds.on = pDly[0]->load() > 0.5f; ds.type = (int) pDly[1]->load(); ds.timeMs = getEffectiveDelayMs();
         ds.repeats = pDly[5]->load(); ds.mix = pDly[6]->load(); ds.tone = pDly[7]->load();
