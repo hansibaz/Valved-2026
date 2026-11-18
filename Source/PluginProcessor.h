@@ -50,6 +50,7 @@ namespace ParamID
     }
 
     inline constexpr const char* greenMode   = "greenMode";    // TS808 / TS9
+    inline constexpr const char* quality     = "quality";      // 0 baixa, 1 média, 2 alta
     inline constexpr const char* ceOn        = "ceOn";         // pedal de chorus (Ensemble, CE-1)
     inline constexpr const char* ceMode      = "ceMode";       // 0 chorus, 1 vibrato
     inline constexpr const char* ceLevel     = "ceLevel";
@@ -158,6 +159,8 @@ public:
     int activeEngine() const { return (int) pEngine->load(); }
 private:
     vlv::pedal::EnsembleChorus ensemble;
+    std::atomic<float>* pQuality = nullptr;
+    int appliedQuality = 1;
     vlv::CabSim cab;
     vlv::Overdrive pedals[4] { vlv::Overdrive (vlv::PedalGreen), vlv::Overdrive (vlv::PedalYellow),
                                vlv::Overdrive (vlv::PedalGold), vlv::Overdrive (vlv::PedalBlue) };

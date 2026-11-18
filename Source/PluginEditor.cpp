@@ -82,6 +82,29 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
     };
     addAndMakeVisible (tunerBtn);
 
+    // Qualidade (sobreamostragem)
+    const char* qTips[3] = { "Low: lighter on the CPU (for simpler computers)",
+                             "Medium: balanced quality and CPU",
+                             "High: best possible quality (uses much more CPU)" };
+    for (int q = 0; q < 3; ++q)
+    {
+        auto& b = qualityBtn[q];
+        b.setClickingTogglesState (false);
+        b.setTooltip (qTips[q]);
+        b.setConnectedEdges ((q > 0 ? juce::Button::ConnectedOnLeft : 0) | (q < 2 ? juce::Button::ConnectedOnRight : 0));
+        b.onClick = [this, q]
+        {
+            if (auto* prm = proc.apvts.getParameter (ParamID::quality))
+            {
+                prm->beginChangeGesture();
+                prm->setValueNotifyingHost (prm->convertTo0to1 ((float) q));
+                prm->endChangeGesture();
+            }
+            for (int k = 0; k < 3; ++k) qualityBtn[k].setToggleState (k == q, juce::dontSendNotification);
+        };
+        addAndMakeVisible (b);
+    }
+
     addAndMakeVisible (inMeter);
     addAndMakeVisible (outMeter);
 
@@ -195,6 +218,11 @@ void ValvedEditor::timerCallback()
     if (page == PagePedals) pedalsPage.refresh();
     if (page == PageFx) fxPage.refresh();
     if (tunerView.isVisible()) tunerView.tick();
+    {
+        const int q = (int) proc.apvts.getRawParameterValue (ParamID::quality)->load();
+        for (int k = 0; k < 3; ++k)
+            if (qualityBtn[k].getToggleState() != (k == q)) qualityBtn[k].setToggleState (k == q, juce::dontSendNotification);
+    }
     inMeter.setLevel (proc.getInputLevel());
     outMeter.setLevel (proc.getOutputLevel());
 }
@@ -214,7 +242,9 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.22", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.23", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.setFont (Fonts::condensedBold (12.0f));
+    g.drawText ("QUALITY", qualityLabelArea, juce::Justification::centredRight);
 
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawText ("IN", inMeter.getBounds().translated (0, inMeter.getHeight() + 2).withHeight (12).expanded (8, 0), juce::Justification::centred);
@@ -239,6 +269,12 @@ void ValvedEditor::resized()
     for (auto* t : { &pedalsTab, &ampTab, &cabTab, &fxTab })
         t->setBounds (tabs.removeFromLeft (110));
 
+    {
+        // Qualidade: no cabeçalho, à esquerda do número da versão
+        auto qa = juce::Rectangle<int> (getWidth() - 24 - 46 - 3 * 46, 15, 3 * 46, 28);
+        for (int q = 0; q < 3; ++q) qualityBtn[q].setBounds (qa.getX() + q * 46, qa.getY(), 46, qa.getHeight());
+        qualityLabelArea = juce::Rectangle<int> (qa.getX() - 70, qa.getY(), 62, qa.getHeight());
+    }
     auto row2 = juce::Rectangle<int> (0, 66, getWidth(), 100).reduced (26, 0);
     input.setBounds (row2.removeFromLeft (92));
     row2.removeFromLeft (10);

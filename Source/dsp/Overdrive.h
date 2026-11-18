@@ -39,7 +39,7 @@ public:
     }
     Overdrive (Overdrive&&) noexcept = default;
 
-    void prepare (double sampleRate, int maxBlock) { impl->prepare (sampleRate, maxBlock); }
+    void prepare (double sampleRate, int maxBlock, int quality = 1) { impl->prepare (sampleRate, maxBlock, quality); }
     void setVariant (int v) { variant = v; }
     void setParams (bool on, float drive, float tone, float level)
     {

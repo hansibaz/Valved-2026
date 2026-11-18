@@ -89,6 +89,10 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::greenMode, 1 }, "Green Drive Mode",
         StringArray { "TS808", "TS9" }, 0));
 
+    // ---- Qualidade (sobreamostragem): baixa / média / alta
+    p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::quality, 1 }, "Quality",
+        StringArray { "Low", "Medium", "High" }, 1, AudioParameterChoiceAttributes().withAutomatable (false)));
+
     // ---- Pedal de chorus Ensemble (CE-1), o primeiro da cadeia
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::ceOn, 1 }, "Chorus On", false));
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::ceMode, 1 }, "Chorus Vibrato Mode", false));
@@ -165,6 +169,7 @@ ValvedProcessor::ValvedProcessor()
     pMicPresence = apvts.getRawParameterValue (ParamID::micPresence);
     pMd421Bass   = apvts.getRawParameterValue (ParamID::md421Bass);
     pOutput    = apvts.getRawParameterValue (ParamID::output);
+    pQuality = apvts.getRawParameterValue (ParamID::quality);
     {
         const char* ids[] = { ParamID::ceOn, ParamID::ceMode, ParamID::ceLevel, ParamID::ceIntensity, ParamID::ceDepth, ParamID::ceRate };
         for (int k = 0; k < 6; ++k) pCe[k] = apvts.getRawParameterValue (ids[k]);
@@ -212,13 +217,14 @@ void ValvedProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     shifter.prepare (sampleRate);
     gateGains.assign ((size_t) juce::jmax (1, samplesPerBlock), 1.0f);
     gateDelay.assign (1 << 13, 1.0f); gateDelayW = 0;
-    amp.prepare (sampleRate, samplesPerBlock);
-    neuralAmp.prepare (sampleRate, samplesPerBlock);
+    appliedQuality = juce::jlimit (0, 2, (int) pQuality->load());
+    amp.prepare (sampleRate, samplesPerBlock, appliedQuality);
+    neuralAmp.prepare (sampleRate, samplesPerBlock, appliedQuality);
     lastEngine = activeEngine();
     ensemble.setParams (pCe[0]->load() > 0.5f, pCe[1]->load() > 0.5f, pCe[2]->load(), pCe[3]->load(), pCe[4]->load(), pCe[5]->load());
     ensemble.prepare (sampleRate);
-    for (auto& pd : pedals) pd.prepare (sampleRate, samplesPerBlock);
-    compressor.prepare (sampleRate, samplesPerBlock);
+    for (auto& pd : pedals) pd.prepare (sampleRate, samplesPerBlock, appliedQuality);
+    compressor.prepare (sampleRate, samplesPerBlock, appliedQuality);
     delay.prepare (sampleRate);
     reverb.prepare (sampleRate);
 
@@ -279,10 +285,19 @@ void ValvedProcessor::refreshCab (bool force)
 
 void ValvedProcessor::timerCallback()
 {
+    // Troca de qualidade: pausa o áudio, refaz os filtros/sobreamostragem e volta
+    // (fora da thread de áudio, então não há alocação de memória durante o processamento)
+    if (prepared && (int) pQuality->load() != appliedQuality && getSampleRate() > 0)
+    {
+        suspendProcessing (true);
+        prepareToPlay (getSampleRate(), getBlockSize());
+        suspendProcessing (false);
+    }
     if (prepared) refreshCab (false);
-    // Informa à DAW o atraso do transpose (compensação automática)
+    // Informa à DAW o atraso (transpose, amp neural, filtros da qualidade alta): compensação automática
     int lat = shifter.getSemitones() != 0 ? shifter.getLatencySamples() : 0;
     if (activeEngine() == EngineNeural) lat += neuralAmp.getLatencySamples();
+    else lat += amp.getLatencySamples();
     if (lat != getLatencySamples()) setLatencySamples (lat);
 }
 

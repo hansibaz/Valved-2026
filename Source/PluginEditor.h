@@ -54,6 +54,8 @@ private:
     TopKnob input, gate, transpose, output;
     juce::Label tuningLabel;
     juce::TextButton tunerBtn { "TUNER" };
+    juce::TextButton qualityBtn[3] { juce::TextButton ("LOW"), juce::TextButton ("MED"), juce::TextButton ("HIGH") };
+    juce::Rectangle<int> qualityLabelArea;
     LevelMeter inMeter, outMeter;
 
     juce::OwnedArray<juce::TextButton> ampButtons;

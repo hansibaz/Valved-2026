@@ -19,13 +19,21 @@ inline const std::array<const char*, 4>& ampNames()
 class AmpModel
 {
 public:
-    void prepare (double sampleRate, int maxBlock)
+    // quality: 0 baixa, 1 média, 2 alta (ver osOrderFor)
+    void prepare (double sampleRate, int maxBlock, int quality = 1)
     {
         fs = sampleRate;
-        oversampling = std::make_unique<juce::dsp::Oversampling<float>> (
-            1, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true, false);
-        oversampling->initProcessing ((size_t) juce::jmax (1, maxBlock));
-        osFs = fs * 4.0;
+        osOrder = osOrderFor (quality, fs);
+        // Alta: filtros FIR de fase linear (os mais limpos, com mais atraso); baixa/média: IIR (sem atraso)
+        const auto ftype = quality >= 2 ? juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple
+                                        : juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR;
+        oversampling.reset();
+        if (osOrder > 0)
+        {
+            oversampling = std::make_unique<juce::dsp::Oversampling<float>> (1, (size_t) osOrder, ftype, quality >= 2, quality >= 2);
+            oversampling->initProcessing ((size_t) juce::jmax (1, maxBlock));
+        }
+        osFs = fs * (double) (1 << osOrder);
         const tube::CircuitSpec specs[NumCircuits] = { tube::jcClean(), tube::brit80s(), tube::block5150(), tube::recRectifier() };
         for (int i = 0; i < NumCircuits; ++i)
         {
@@ -72,11 +80,25 @@ public:
             dirty = false;
             circuits[currentCircuit()].setKnobs (set.gain, set.bass, set.mid, set.treble, set.presence, set.master, set.resonance);
         }
+        if (oversampling == nullptr) { circuits[currentCircuit()].processOS (data, numSamples); return; }
         float* chans[1] = { data };
         juce::dsp::AudioBlock<float> block (chans, 1, (size_t) numSamples);
         auto up = oversampling->processSamplesUp (block);
         circuits[currentCircuit()].processOS (up.getChannelPointer (0), (int) up.getNumSamples());
         oversampling->processSamplesDown (block);
+    }
+
+    // atraso (em amostras da DAW) dos filtros de sobreamostragem
+    int getLatencySamples() const { return oversampling ? (int) std::lround (oversampling->getLatencyInSamples()) : 0; }
+
+    // Sobreamostragem: a taxa interna do circuito fica perto de 96 kHz (baixa), 192 kHz (média)
+    // ou 384 kHz (alta), qualquer que seja a taxa do projeto.
+    static int osOrderFor (int quality, double fs)
+    {
+        const double target[3] = { 96000.0, 192000.0, 384000.0 };
+        const int q = juce::jlimit (0, 2, quality);
+        int order = (int) std::lround (std::log2 (target[q] / fs));
+        return juce::jlimit (q == 0 ? 0 : 1, 4, order);
     }
 
     enum { CircClean = 0, CircBrit80, CircBlock, CircRec, NumCircuits };
@@ -96,6 +118,7 @@ private:
     }
 
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampling;
+    int osOrder = 2;
     double fs = 48000, osFs = 192000;
     Settings set;
     bool dirty = true;

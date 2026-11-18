@@ -331,12 +331,17 @@ class PedalBase
 {
 public:
     virtual ~PedalBase() = default;
-    void prepare (double sampleRate, int maxBlock)
+    // quality: 0 baixa (~96 kHz internos), 1 média (~192 kHz), 2 alta (~384 kHz).
+    // Sempre filtros IIR (sem atraso), para o pedal ligar/desligar sem defasar do sinal seco.
+    void prepare (double sampleRate, int maxBlock, int quality = 1)
     {
         fs = sampleRate;
-        os = std::make_unique<juce::dsp::Oversampling<float>> (1, 2, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true, false);
+        const double target[3] = { 96000.0, 192000.0, 384000.0 };
+        const int q = juce::jlimit (0, 2, quality);
+        const int order = juce::jlimit (1, 4, (int) std::lround (std::log2 (target[q] / fs)));
+        os = std::make_unique<juce::dsp::Oversampling<float>> (1, (size_t) order, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true, false);
         os->initProcessing ((size_t) juce::jmax (1, maxBlock));
-        osFs = fs * 4.0;
+        osFs = fs * (double) (1 << order);
         dry.assign ((size_t) juce::jmax (1, maxBlock), 0.0f);
         prepareCircuit();
         dirty = true;

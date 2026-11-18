@@ -200,14 +200,21 @@ private:
 class Resampler
 {
 public:
-    static constexpr int HW = 24, Phases = 256;
+    static constexpr int Phases = 256;
+    // quality: 0 baixa (12 pontos de cada lado), 1 média (24), 2 alta (48, corte mais alto e
+    // rejeição maior). Mais pontos = filtro mais íngreme, menos aliasing, mais processamento.
+    int halfWidth() const { return HW; }
 
-    void prepare (double inRate, double outRate)
+    void prepare (double inRate, double outRate, int quality = 1)
     {
+        static const int hws[3] = { 12, 24, 48 };
+        static const double fcs[3] = { 0.86, 0.91, 0.955 }, betas[3] = { 7.0, 8.0, 10.0 };
+        const int q = std::clamp (quality, 0, 2);
+        HW = hws[q];
         step = inRate / outRate;
-        const double fc = 0.91 * std::min (1.0, outRate / inRate);   // corte relativo ao Nyquist da entrada
+        const double fc = fcs[q] * std::min (1.0, outRate / inRate);   // corte relativo ao Nyquist da entrada
         table.assign ((size_t) (Phases + 1) * 2 * HW, 0.0f);
-        const double beta = 8.0;
+        const double beta = betas[q];
         auto bessel0 = [] (double v) { double s = 1, t = 1; for (int k = 1; k < 30; ++k) { t *= (v / (2 * k)) * (v / (2 * k)); s += t; } return s; };
         const double i0b = bessel0 (beta);
         for (int p = 0; p <= Phases; ++p)
@@ -271,6 +278,7 @@ public:
 private:
     static constexpr double juce_pi_ = 3.14159265358979323846;
     std::vector<float> table, buf;
+    int HW = 24;
     double step = 1.0, pos = 0.0;
     int count = 0;
 };
@@ -288,12 +296,12 @@ public:
         nets[3].load (neuraldata::rec, neuraldata::recK);
     }
 
-    void prepare (double sampleRate, int /*maxBlock*/)
+    void prepare (double sampleRate, int /*maxBlock*/, int quality = 1)
     {
         fs = sampleRate;
         resampling = std::abs (fs - 48000.0) > 1.0;
-        up.prepare (fs, 48000.0);
-        down.prepare (48000.0, fs);
+        up.prepare (fs, 48000.0, quality);
+        down.prepare (48000.0, fs, quality);
         const int cap = 4096;
         x48.assign (cap, 0.0f); y48.assign (cap, 0.0f); tmp.assign (cap, 0.0f);
         fifo.assign (1 << 14, 0.0f);
@@ -373,7 +381,7 @@ public:
     static constexpr float trimDb[4] = { -4.1f, 6.4f, -0.7f, -4.6f };   // Clean 120 baixado 5,5 dB (estava bem mais alto que os outros)   // = nível do motor de circuito (RMS, sinal de treino)
 
 private:
-    int prefill() const { return nn::Resampler::HW + (int) std::ceil (nn::Resampler::HW * fs / 48000.0) + 4; }
+    int prefill() const { return up.halfWidth() + (int) std::ceil (down.halfWidth() * fs / 48000.0) + 4; }
 
     // ---- Margem de entrada ----
     // Os modelos só aprenderam os amps com sinais até ~0 dBFS (o nível da gravação). Um pedal
