@@ -87,8 +87,9 @@ int main (int argc, char** argv)
     }
     // render
     std::ifstream fi (argv[3], std::ios::binary | std::ios::ate);
-    const size_t N = (size_t) fi.tellg() / 4; fi.seekg (0);
+    size_t N = (size_t) fi.tellg() / 4; fi.seekg (0);
     std::vector<float> x (N); fi.read ((char*) x.data(), (std::streamsize) (N * 4));
+    if (argc > 6) N = std::min (N, (size_t) std::atol (argv[6]));   // limite opcional (amostras)
     std::vector<float> defaults ((size_t) e->numParams);
     for (int i = 0; i < e->numParams; ++i) defaults[(size_t) i] = e->getParameter (e, i);
     std::ifstream fs (argv[4]); std::string line;
@@ -110,17 +111,18 @@ int main (int argc, char** argv)
         std::fill (inL.begin(), inL.end(), 0.0f); std::fill (inR.begin(), inR.end(), 0.0f);
         float* ins[2] = { inL.data(), inR.data() }; float* outs[2] = { outL.data(), outR.data() };
         for (int b = 0; b < 48000 / B; ++b) e->processReplacing (e, ins, outs, B);
-        std::vector<float> y; y.reserve (N);
+        std::vector<float> y, yr; y.reserve (N); yr.reserve (N);
         for (size_t s = 0; s < N; s += B)
         {
             const int n = (int) std::min ((size_t) B, N - s);
             for (int i = 0; i < B; ++i) { const float v = i < n ? x[s + i] : 0.0f; inL[(size_t) i] = v; inR[(size_t) i] = v; }
             e->processReplacing (e, ins, outs, B);
-            for (int i = 0; i < n; ++i) y.push_back (outL[(size_t) i]);
+            for (int i = 0; i < n; ++i) { y.push_back (outL[(size_t) i]); yr.push_back (outR[(size_t) i]); }
         }
         e->dispatcher (e, effStopProcess, 0, 0, nullptr, 0);
         std::string fn = std::string (argv[5]) + "/" + name + ".f32";
         FILE* fo = fopen (fn.c_str(), "wb"); fwrite (y.data(), 4, y.size(), fo); fclose (fo);
+        if (argc > 6) { std::string fr = std::string (argv[5]) + "/" + name + "_R.f32"; FILE* f2 = fopen (fr.c_str(), "wb"); fwrite (yr.data(), 4, yr.size(), f2); fclose (f2); }
         double en = 0; float pk = 0; for (float v : y) { en += (double) v * v; pk = std::max (pk, std::abs (v)); }
         printf ("%s: rms %.1f dB pico %.2f\n", name.c_str(), 10 * log10 (en / y.size() + 1e-30), pk);
         fflush (stdout);

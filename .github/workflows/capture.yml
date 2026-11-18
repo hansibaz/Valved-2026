@@ -33,7 +33,11 @@ jobs:
           if [ "$mode" = "list" ]; then
             ./capture.exe list gerbert.dll | tee out/list.txt
           else
-            ./capture.exe render gerbert.dll di.f32 tools/capture/settings.txt out | tee out/log.txt
+            if [ "$mode" = "test" ]; then
+              ./capture.exe render gerbert.dll di.f32 tools/capture/settings_test.txt out 1440000 | tee out/log.txt
+            else
+              ./capture.exe render gerbert.dll di.f32 tools/capture/settings.txt out | tee out/log.txt
+            fi
           fi
           rm -f gerbert.dll
           cd out && 7z a -tzip -mx=5 ../capture-out.zip . > /dev/null
