@@ -66,7 +66,7 @@ private:
     ToggleSwitch* findSwitch (const juce::String& id);
 
     // Amps com a interface em imagem (UI kits do 51 BLOCK e do REC): foto + knobs/chaves interativos
-    bool imageMode() const { return model == 2 || model == 3 || model == 4; }   // 51 Block, REC e REC Version 2
+    bool imageMode() const { return model != 1; }   // Clean 120, 51 Block, REC e REC Version 2 (Brit80 ainda em código)
 public:
     struct ImageSpec
     {
@@ -91,6 +91,7 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> recPowerAtt, recStandbyAtt;
     juce::Image recBg, recBgV2, recLedOff;
     juce::Image blockBg, blockLedOff, recPowerOff, recStandbyOff, blockPowerOff, blockStandbyOff;
+    juce::Image cleanBg, cleanLedOff, cleanPowerOff, cleanStandbyOff;
     bool powerShown = true;
 
     juce::Image cache;

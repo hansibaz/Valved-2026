@@ -55,6 +55,12 @@ namespace
     const float blockKnobX[7] = { 526.0f, 644.0f, 753.0f, 861.0f, 1006.0f, 1139.0f, 1270.0f };
     const float blockKnobY[7] = { 716.0f, 716.0f, 716.0f, 716.0f, 716.0f, 716.0f, 716.0f };
 
+    // Clean 120 em imagem: centros das tampas (VOLUME, TREBLE, MIDDLE, BASS | OUTPUT) na foto 1672 x 941;
+    // escala de 11 marcas, -150° a +150°
+    const float cleanKnobX[5] = { 593.5f, 733.0f, 873.5f, 1013.0f, 1212.0f };
+    const float cleanKnobY[5] = { 631.0f, 631.0f, 631.0f, 631.0f, 630.5f };
+    const AmpHead::ImageSpec cleanSpec { 1672.0f, 941.0f, 0.6f, cleanKnobX, cleanKnobY, 5, 76.0f,
+                                         { 248.0f, 621.0f }, { 341.0f, 621.0f }, { 425.0f, 625.0f }, { 70.0f, 110.0f }, 60.0f };
     const AmpHead::ImageSpec recSpec   { 1672.0f, 941.0f, 0.6f, recKnobX, recKnobY, 6, recKnobSize,
                                          { 230.0f, 616.0f }, { 333.0f, 616.0f }, { 424.0f, 610.0f }, { 60.0f, 80.0f }, 60.0f };
     const AmpHead::ImageSpec recV2Spec { 1672.0f, 941.0f, 0.6f, recV2KnobX, recV2KnobY, 8, recKnobSize,
@@ -267,6 +273,10 @@ AmpHead::AmpHead (juce::AudioProcessorValueTreeState& s) : state (s)
     blockLedOff = juce::ImageCache::getFromMemory (BinaryData::block_led_off_png, BinaryData::block_led_off_pngSize);
     blockPowerOff = juce::ImageCache::getFromMemory (BinaryData::block_power_off_png, BinaryData::block_power_off_pngSize);
     blockStandbyOff = juce::ImageCache::getFromMemory (BinaryData::block_standby_off_png, BinaryData::block_standby_off_pngSize);
+    cleanBg = juce::ImageCache::getFromMemory (BinaryData::clean_background_jpg, BinaryData::clean_background_jpgSize);
+    cleanLedOff = juce::ImageCache::getFromMemory (BinaryData::clean_led_off_png, BinaryData::clean_led_off_pngSize);
+    cleanPowerOff = juce::ImageCache::getFromMemory (BinaryData::clean_power_off_png, BinaryData::clean_power_off_pngSize);
+    cleanStandbyOff = juce::ImageCache::getFromMemory (BinaryData::clean_standby_off_png, BinaryData::clean_standby_off_pngSize);
     recPower = std::make_unique<RecToggle>();
     recStandby = std::make_unique<RecToggle>();
     recPower->setTooltip ("POWER: off = amp off (no sound)");
@@ -298,14 +308,13 @@ void AmpHead::RecToggle::paintButton (juce::Graphics& g, bool, bool)
 
 const AmpHead::ImageSpec& AmpHead::spec() const
 {
-    return model == Block ? blockSpec : (model == RecV2 ? recV2Spec : recSpec);
+    return model == Clean ? cleanSpec : model == Block ? blockSpec : (model == RecV2 ? recV2Spec : recSpec);
 }
 
 void AmpHead::refreshImageAssets()
 {
-    const bool block = model == Block;
-    recPower->offImg = block ? blockPowerOff : recPowerOff;
-    recStandby->offImg = block ? blockStandbyOff : recStandbyOff;
+    recPower->offImg = model == Clean ? cleanPowerOff : model == Block ? blockPowerOff : recPowerOff;
+    recStandby->offImg = model == Clean ? cleanStandbyOff : model == Block ? blockStandbyOff : recStandbyOff;
 }
 
 juce::Rectangle<float> AmpHead::imageRect() const
@@ -356,8 +365,8 @@ void AmpHead::setModel (int m)
     for (auto* k : sliders)
     {
         k->setVisible (false);
-        k->getProperties().set ("knobStyle", imageMode() ? (int) (model == Block ? KnobBlockImage : KnobRecImage) : knobStyleOf[model]);
-        if (imageMode() && model != Block) k->setRotaryParameters (recStart, recEnd, true);
+        k->getProperties().set ("knobStyle", imageMode() ? (int) (model == Clean ? KnobCleanImage : model == Block ? KnobBlockImage : KnobRecImage) : knobStyleOf[model]);
+        if (imageMode() && (model == Rec || model == RecV2)) k->setRotaryParameters (recStart, recEnd, true);
         else k->setRotaryParameters (knobStart, knobEnd, true);
     }
     refreshImageAssets();
@@ -479,7 +488,7 @@ void AmpHead::paint (juce::Graphics& g)
     {
         g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
         const auto& sp = spec();
-        g.drawImage (model == Block ? blockLedOff : recLedOff, imageBox (sp.led.x, sp.led.y, sp.ledSize, sp.ledSize).toFloat(),
+        g.drawImage (model == Clean ? cleanLedOff : model == Block ? blockLedOff : recLedOff, imageBox (sp.led.x, sp.led.y, sp.ledSize, sp.ledSize).toFloat(),
                      juce::RectanglePlacement::stretchToFit);
     }
 }
@@ -497,7 +506,7 @@ void AmpHead::renderBackground()
     if (imageMode())
     {
         g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
-        g.drawImage (model == Block ? blockBg : (model == RecV2 ? recBgV2 : recBg), imageRect(), juce::RectanglePlacement::stretchToFit);
+        g.drawImage (model == Clean ? cleanBg : model == Block ? blockBg : (model == RecV2 ? recBgV2 : recBg), imageRect(), juce::RectanglePlacement::stretchToFit);
         // sombra suave no topo, para os botões de amp/motor ficarem legíveis sobre a foto
         juce::ColourGradient top (juce::Colours::black.withAlpha (0.6f), 0.0f, 0.0f, juce::Colours::transparentBlack, 0.0f, 84.0f, false);
         g.setGradientFill (top);

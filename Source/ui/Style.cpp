@@ -332,6 +332,37 @@ void ValvedLook::drawBlockImageKnob (juce::Graphics& g, juce::Rectangle<float> r
     g.drawImageTransformed (img, place (0.0f, 0.0f));
 }
 
+// Knob do Clean 120 (UI em imagem): o knob prateado já está na foto (sem a marcação, que foi
+// apagada); só a marcação branca gira, do meio da tampa até o anel serrilhado, como na foto.
+// A área do knob cobre 76 px da foto; a tampa tem 30 px de raio.
+void ValvedLook::drawCleanImageKnob (juce::Graphics& g, juce::Rectangle<float> r, float angle)
+{
+    const float k = r.getWidth() / 76.0f;
+    const auto c = r.getCentre();
+    auto taper = [&] (float r1, float r2, float w1, float w2)
+    {
+        juce::Path p;
+        p.startNewSubPath (-w1 * 0.5f * k, -r1 * k);
+        p.lineTo (-w2 * 0.5f * k, -r2 * k);
+        p.quadraticTo (0.0f, -(r2 + 0.9f) * k, w2 * 0.5f * k, -r2 * k);
+        p.lineTo (w1 * 0.5f * k, -r1 * k);
+        p.closeSubPath();
+        return p;
+    };
+    const auto rot = juce::AffineTransform::rotation (angle).translated (c.x, c.y);
+    // sombra da marcação (luz de cima)
+    g.setColour (juce::Colours::black.withAlpha (0.45f));
+    g.fillPath (taper (15.0f, 36.5f, 2.4f, 3.6f), rot.translated (0.5f * k, 0.8f * k));
+    // marcação: branca, um pouco mais fosca na ponta de dentro
+    const auto p = taper (15.0f, 36.5f, 1.6f, 2.8f);
+    const juce::Point<float> inner (c.x + std::sin (angle) * 15.0f * k, c.y - std::cos (angle) * 15.0f * k);
+    const juce::Point<float> outer (c.x + std::sin (angle) * 36.5f * k, c.y - std::cos (angle) * 36.5f * k);
+    g.setGradientFill (juce::ColourGradient (juce::Colour (0xffcfcac2), inner, juce::Colour (0xfffbf8f2), outer, false));
+    g.fillPath (p, rot);
+    g.setColour (juce::Colour (0x66282420));
+    g.strokePath (p, juce::PathStrokeType (0.45f * k), rot);
+}
+
 void ValvedLook::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos,
                                    float startAngle, float endAngle, juce::Slider& s)
 {
@@ -343,6 +374,8 @@ void ValvedLook::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h
         drawRecImageKnob (g, r, startAngle + pos * (endAngle - startAngle));
     else if (style == KnobBlockImage)
         drawBlockImageKnob (g, r, startAngle + pos * (endAngle - startAngle));
+    else if (style == KnobCleanImage)
+        drawCleanImageKnob (g, r, startAngle + pos * (endAngle - startAngle));
     else
     {
         const float d = juce::jmin (r.getWidth(), r.getHeight());
