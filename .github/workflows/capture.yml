@@ -1,0 +1,46 @@
+name: Captura (amp de referência)
+
+on:
+  push:
+    branches: [capture]
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    runs-on: windows-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Preparar plugin e sinal
+        shell: bash
+        env:
+          KEY: ${{ secrets.GERBERT_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then echo "Falta o segredo GERBERT_KEY"; exit 1; fi
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in tools/capture/gerbert.dll.enc -out gerbert.dll -pass env:KEY
+          gunzip -c tools/capture/di.f32.gz > di.f32
+      - name: Compilar host
+        shell: cmd
+        run: cl /O2 /EHsc /std:c++17 tools\capture\capture.cpp /Fe:capture.exe
+      - name: Rodar
+        shell: bash
+        run: |
+          mode=$(head -1 tools/capture/job.txt | tr -d '\r')
+          mkdir -p out
+          if [ "$mode" = "list" ]; then
+            ./capture.exe list gerbert.dll | tee out/list.txt
+          else
+            ./capture.exe render gerbert.dll di.f32 tools/capture/settings.txt out | tee out/log.txt
+          fi
+          rm -f gerbert.dll
+          cd out && 7z a -tzip -mx=5 ../capture-out.zip . > /dev/null
+      - name: Publicar resultado
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete capture-out --yes --cleanup-tag 2>/dev/null || true
+          gh release create capture-out capture-out.zip --target ${{ github.sha }} --prerelease --title "Captura (resultado)" --notes "Saída da captura"
