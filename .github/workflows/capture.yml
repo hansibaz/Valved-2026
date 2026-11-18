@@ -33,7 +33,9 @@ jobs:
           if [ "$mode" = "list" ]; then
             ./capture.exe list gerbert.dll | tee out/list.txt
           else
-            if [ "$mode" = "test" ]; then
+            if [ "$mode" = "diag" ]; then
+              ./capture.exe render gerbert.dll tools/capture/diag.f32 tools/capture/settings_diag.txt out 100000000 | tee out/log.txt
+            elif [ "$mode" = "test" ]; then
               ./capture.exe render gerbert.dll di.f32 tools/capture/settings_test.txt out 1440000 | tee out/log.txt
             else
               ./capture.exe render gerbert.dll di.f32 tools/capture/settings.txt out | tee out/log.txt
