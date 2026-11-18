@@ -311,23 +311,25 @@ void ValvedLook::drawRecImageKnob (juce::Graphics& g, juce::Rectangle<float> r, 
     g.strokePath (line, juce::PathStrokeType (2.3f * k, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 }
 
-// Knob do 51 Block (UI em imagem): "chicken head" preto renderizado em 3D em 48 posições
-// (a cada 7,5°, com a luz do estúdio parada); usa o quadro mais próximo e gira só a diferença.
-// Cada quadro tem 200 px e cobre 100 px da foto; a sombra no painel já vem no quadro.
+// Knob do 51 Block (UI em imagem): foto do chicken-head preto (vista de cima, apontando para
+// cima) que gira inteira; a luz da foto é suave e por igual, então o giro fica natural.
+// A sombra (borrada) gira junto com o knob, mas fica sempre deslocada para baixo/direita.
 void ValvedLook::drawBlockImageKnob (juce::Graphics& g, juce::Rectangle<float> r, float angle)
 {
-    static const juce::Image strip = juce::ImageCache::getFromMemory (BinaryData::block_knob_strip_png, BinaryData::block_knob_strip_pngSize);
-    constexpr int frames = 48, cols = 8, fs = 200;
-    const float twoPi = juce::MathConstants<float>::twoPi;
-    float a = std::fmod (angle, twoPi); if (a < 0) a += twoPi;
-    const float step = twoPi / (float) frames;
-    const int idx = juce::roundToInt (a / step) % frames;
-    const float rest = a - (float) idx * step;
-    const auto frame = strip.getClippedImage ({ (idx % cols) * fs, (idx / cols) * fs, fs, fs });
-    const float sc = r.getWidth() / (float) fs;
+    static const juce::Image img = juce::ImageCache::getFromMemory (BinaryData::block_knob_png, BinaryData::block_knob_pngSize);
+    static const juce::Image shadow = juce::ImageCache::getFromMemory (BinaryData::block_knob_shadow_png, BinaryData::block_knob_shadow_pngSize);
+    const float n = (float) img.getWidth();
+    const float sc = r.getWidth() / n;      // o quadro cobre 100 px da foto do amp
+    const float u = r.getWidth() / 100.0f;
+    auto place = [&] (float dx, float dy)
+    {
+        return juce::AffineTransform::rotation (angle, n * 0.5f, n * 0.5f).scaled (sc).translated (r.getX() + dx, r.getY() + dy);
+    };
     g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
-    g.drawImageTransformed (frame, juce::AffineTransform::rotation (rest, fs * 0.5f, fs * 0.5f)
-                                      .scaled (sc).translated (r.getX(), r.getY()));
+    g.setOpacity (0.75f);
+    g.drawImageTransformed (shadow, place (2.2f * u, 3.4f * u));
+    g.setOpacity (1.0f);
+    g.drawImageTransformed (img, place (0.0f, 0.0f));
 }
 
 void ValvedLook::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos,

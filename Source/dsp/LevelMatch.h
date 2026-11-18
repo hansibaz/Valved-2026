@@ -29,8 +29,8 @@ struct LevelMatch
     static constexpr float targetLufs = -18.0f;
 
     // Ganho (linear) a aplicar depois do amp
-    // Rec V2: o Master já é volume puro (dobra = +6 dB); só falta acertar o nível no Master 5
-    static constexpr float recV2AtMaster5 = -24.7f;   // medido (LUFS), relativo ao Rec Neural no mesmo sinal
+    // Rec V2: sem igualar com os outros amps; sai no mesmo nível do Gerbert (Master 5 = Volume 5)
+    static constexpr float recV2AtMaster5 = targetLufs;
 
     static float gain (int engine, int amp, float master)
     {

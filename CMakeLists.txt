@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Valved VERSION 0.29.0)
+project(Valved VERSION 0.30.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -61,7 +61,8 @@ juce_add_binary_data(ValvedAssets SOURCES
     Resources/RecUI/rec_standby_off.png
     Resources/RecUI/rec_led_off.png
     Resources/BlockUI/block_background.jpg
-    Resources/BlockUI/block_knob_strip.png
+    Resources/BlockUI/block_knob.png
+    Resources/BlockUI/block_knob_shadow.png
     Resources/BlockUI/block_power_off.png
     Resources/BlockUI/block_standby_off.png
     Resources/BlockUI/block_led_off.png)
