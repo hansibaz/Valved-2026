@@ -240,7 +240,9 @@ private:
         }
         wow.setRate (fs, 0.45 + 0.6 * p); wow2.setRate (fs, 2.2); bbdWander.setRate (fs, 0.35);
 
-        grit = type == Digital ? p : (type == Tape ? 0.4f + 0.6f * p : (type == Analog ? 0.5f + 0.5f * p : 0.0f));
+        // Digital: limpo até a metade do GRIT (o padrão é 5 = limpo); só sujo de propósito, acima disso.
+        // (as repetições já vêm depois da caixa: distorção aqui soa "sem caixa", zumbido de linha)
+        grit = type == Digital ? juce::jmax (0.0f, p - 0.5f) * 2.0f : (type == Tape ? 0.25f + 0.75f * p : (type == Analog ? 0.5f + 0.5f * p : 0.0f));
         dualRatio = 0.25 + 0.75 * (double) p;
         swellRate = 1.0f / ((0.05f + 1.8f * p * p) * (float) fs) * 4.0f;
         duckSens = 2.0f + 30.0f * p;
@@ -267,12 +269,14 @@ private:
         if (lastType == Tape)
         {
             // pré-ênfase -> saturação da fita -> de-ênfase (agudos comprimem antes)
+            // saturação suave com folga: num nível normal de guitarra quase não distorce (só aquece);
+            // a perda de agudos vem antes, para a saturação não criar chiado em cima
+            x = f[2].process (x);
             x = f[5].process (x);
-            const float drive = 1.0f + 2.5f * grit;
-            x = std::tanh (x * drive) / drive * (1.0f + 0.25f * grit);
+            const float hr = 1.3f / (1.0f + 0.8f * grit);          // folga (AGE alto = satura mais cedo)
+            x = hr * std::tanh (x / hr);
             x = f[6].process (x);
             x = f[7].process (x);                               // head bump (graves)
-            x = f[2].process (x);                               // perda de agudos (AGE/TONE)
             return x;
         }
         if (lastType == Analog)
@@ -283,16 +287,18 @@ private:
             const float cg = 1.0f / std::sqrt (std::max (compEnv[ch], 0.02f) / 0.25f);
             x *= cg;
             x = f[3].process (f[2].process (x));                // anti-aliasing 4 polos (clock do BBD)
-            x = std::tanh (x * 1.2f) / 1.2f;
+            const float hr = 1.5f - 0.5f * grit;                // o BBD só satura nos picos
+            x = hr * std::tanh (x / hr);
             x = f[4].process (x);                               // reconstrução
             x /= cg;
-            return std::tanh (x);
+            return 1.5f * std::tanh (x / 1.5f);                 // teto de segurança (não mexe no nível normal)
         }
         x = f[2].process (x);                                   // TONE 12 dB/oit
         if (grit > 0.0f)
         {
-            const float drive = 1.0f + 3.0f * grit;
-            x = x + (std::tanh (x * drive) / drive - x) * std::min (1.0f, grit * 1.5f);
+            const float hr = 0.8f / (1.0f + 3.0f * grit);
+            x = x + (hr * std::tanh (x / hr) - x) * std::min (1.0f, grit * 1.5f);
+            x = f[3].process (x);                               // tira o chiado que a saturação cria
         }
         return x;
     }
