@@ -8,7 +8,7 @@
 class PresetManager
 {
 public:
-    static constexpr int NumFactory = 10, NumUser = 50;
+    static constexpr int NumFactory = 15, NumUser = 50;
 
     explicit PresetManager (ValvedProcessor& p) : proc (p) { takeSnapshot(); }
 
@@ -22,7 +22,8 @@ public:
     static juce::StringArray factoryNames()
     {
         return { "Crystal Clean", "Ensemble Clean", "Brit Crunch", "Brit Lead", "Blues Breaker",
-                 "51 Rhythm", "51 Lead", "Rec Modern", "DZ MOD Heavy", "Ambient Swell" };
+                 "51 Rhythm", "51 Lead", "Rec Modern", "DZ MOD Heavy", "Ambient Swell",
+                 "Puppets Thrash", "Lightning 800", "Black Album", "Petrucci Rhythm", "Petrucci Lead" };
     }
 
     juce::String userName (int slot) const
@@ -261,6 +262,50 @@ private:
                 set (ParamID::ceOn, 1.0f); set (ParamID::ceIntensity, 5.0f);
                 delay (7, 520.0f, 6.0f, 32.0f, 5.0f, 4.0f);
                 reverb (6, 8.0f, 42.0f, 40.0f, 5.5f);
+                break;
+            // ---- Inspirados em timbres clássicos (configurações publicadas dos equipamentos; o resto se ajusta de ouvido)
+            case 10: // Puppets Thrash: Mark IIC+ (gain 6, bass 6, mid 3, treble 7, presence 5) + EQ gráfico em "V"
+                amp (3, 6.0f, 6.0f, 3.0f, 7.0f, 5.0f, 5.0f);
+                cab (0, 0, 0.25f);
+                set (ParamID::gate, -58.0f);
+                set (ParamID::eqOn, 1.0f); set (ParamID::eqMode, 1.0f);
+                set (ParamID::eqBand (1, 0), 4.0f); set (ParamID::eqBand (1, 1), 0.0f); set (ParamID::eqBand (1, 2), -5.0f);
+                set (ParamID::eqBand (1, 3), 3.0f); set (ParamID::eqBand (1, 4), 0.0f);
+                break;
+            case 11: // Lightning 800: JCM800 (gain 6, bass 6, mid 3, treble 8, presence 6) empurrado por um TS808
+                amp (1, 7.0f, 6.0f, 3.0f, 8.0f, 6.0f, 5.0f);
+                cab (1, 0, 0.22f);
+                pedal (0, 1.0f, 5.5f, 7.5f);
+                set (ParamID::gate, -60.0f);
+                reverb (0, 2.5f, 8.0f);
+                break;
+            case 12: // Black Album: Mark IIC+/IV (gain 6, bass 6, mid 4, treble 7, presence 6,5), "V" leve, sala curta
+                amp (3, 6.0f, 6.0f, 4.0f, 7.0f, 6.5f, 5.0f);
+                cab (0, 0, 0.30f, 0.15f);
+                set (ParamID::gate, -60.0f);
+                set (ParamID::eqOn, 1.0f); set (ParamID::eqMode, 1.0f);
+                set (ParamID::eqBand (1, 0), 3.0f); set (ParamID::eqBand (1, 2), -3.0f); set (ParamID::eqBand (1, 3), 2.0f);
+                reverb (0, 2.0f, 10.0f);
+                break;
+            case 13: // Petrucci Rhythm: Mark (gain 8, bass 5, mid 4, treble 6, presence 3) + EQ 80 +5 / 240 -4 / 750 -7 / 2200 +5 / 6600 +6
+                amp (3, 8.0f, 5.0f, 4.0f, 6.0f, 3.0f, 5.0f);
+                cab (0, 0, 0.22f);
+                pedal (0, 0.0f, 6.0f, 7.0f);   // TS808 como boost
+                set (ParamID::gate, -54.0f);
+                set (ParamID::eqOn, 1.0f); set (ParamID::eqMode, 1.0f);
+                set (ParamID::eqBand (1, 0), 5.0f); set (ParamID::eqBand (1, 1), -4.0f); set (ParamID::eqBand (1, 2), -7.0f);
+                set (ParamID::eqBand (1, 3), 5.0f); set (ParamID::eqBand (1, 4), 6.0f);
+                break;
+            case 14: // Petrucci Lead: mais médio para o solo cantar, delay e hall
+                amp (3, 8.5f, 5.0f, 5.5f, 6.0f, 4.0f, 5.0f);
+                cab (0, 0, 0.25f);
+                pedal (0, 0.0f, 6.0f, 7.0f);
+                set (ParamID::gate, -60.0f);
+                set (ParamID::eqOn, 1.0f); set (ParamID::eqMode, 1.0f);
+                set (ParamID::eqBand (1, 0), 3.0f); set (ParamID::eqBand (1, 1), -2.0f); set (ParamID::eqBand (1, 2), -3.0f);
+                set (ParamID::eqBand (1, 3), 4.0f); set (ParamID::eqBand (1, 4), 3.0f);
+                delay (0, 480.0f, 4.0f, 22.0f, 5.5f, 2.0f);
+                reverb (1, 4.5f, 16.0f);
                 break;
             default: break;
         }
