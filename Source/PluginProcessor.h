@@ -126,6 +126,11 @@ public:
     // Carrega um IR do usuário (chamado pela interface)
     bool loadUserIR (const juce::File& file);
     juce::String getUserIRName() const;
+    juce::File getUserIRFile() const { const juce::ScopedLock sl (irLock); return userIRFile; }
+
+    // Preset atual (0..9 fábrica, 10..59 usuário, -1 nenhum); salvo junto com a sessão
+    int presetIndex = 0;
+    juce::String presetName { "Crystal Clean" };
 
     float getInputLevel() const  { return inputMeter.load(); }
     float getOutputLevel() const { return outputMeter.load(); }

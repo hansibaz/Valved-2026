@@ -8,6 +8,7 @@
 #include "ui/PedalsPage.h"
 #include "ui/FxPage.h"
 #include "ui/TunerView.h"
+#include "ui/PresetBar.h"
 
 // Knob moderno da barra superior (nome em cima, valor embaixo)
 class TopKnob : public juce::Component
@@ -54,6 +55,7 @@ private:
     juce::TextButton pedalsTab { "PEDALS" }, ampTab { "AMP" }, cabTab { "CAB" }, fxTab { "FX" };
     TopKnob input, gate, transpose, output;
     juce::Label tuningLabel;
+    PresetBar presetBar;
     juce::TextButton tunerBtn { "TUNER" };
     juce::TextButton qualityBtn[3] { juce::TextButton ("LOW"), juce::TextButton ("MED"), juce::TextButton ("HIGH") };
     juce::Rectangle<int> qualityLabelArea;

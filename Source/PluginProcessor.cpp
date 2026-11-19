@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "Presets.h"
 #include "PluginEditor.h"
 
 using APVTS = juce::AudioProcessorValueTreeState;
@@ -234,6 +235,7 @@ ValvedProcessor::ValvedProcessor()
     }
 
     startTimerHz (20);
+    PresetManager (*this).load (0);   // instância nova começa no primeiro preset de fábrica
 }
 
 ValvedProcessor::~ValvedProcessor() { stopTimer(); }
@@ -561,6 +563,8 @@ void ValvedProcessor::getStateInformation (juce::MemoryBlock& destData)
     }
     state.setProperty ("tunerRef", tunerRef.load(), nullptr);
     state.setProperty ("tunerMute", tunerMute.load(), nullptr);
+    state.setProperty ("presetIndex", presetIndex, nullptr);
+    state.setProperty ("presetName", presetName, nullptr);
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
@@ -575,6 +579,8 @@ void ValvedProcessor::setStateInformation (const void* data, int sizeInBytes)
             const juce::String irPath = tree.getProperty ("userIR").toString();
             tunerRef = juce::jlimit (430.0, 450.0, (double) tree.getProperty ("tunerRef", 440.0));
             tunerMute = (bool) tree.getProperty ("tunerMute", true);
+            presetIndex = (int) tree.getProperty ("presetIndex", -1);
+            presetName = tree.getProperty ("presetName", "").toString();
             apvts.replaceState (tree);
             {
                 const juce::ScopedLock sl (irLock);

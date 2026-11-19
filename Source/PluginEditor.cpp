@@ -49,6 +49,7 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
       gate (p.apvts, ParamID::gate, "GATE"),
       transpose (p.apvts, ParamID::transpose, "TRANSPOSE"),
       output (p.apvts, ParamID::output, "OUTPUT"),
+      presetBar (p),
       head (p.apvts),
       cabPage (p), pedalsPage (p), fxPage (p), tunerView (p)
 {
@@ -71,6 +72,7 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
     tuningLabel.setColour (juce::Label::textColourId, accent);
     tuningLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (tuningLabel);
+    addAndMakeVisible (presetBar);
 
     tunerBtn.setClickingTogglesState (true);
     tunerBtn.setTooltip ("Tuner");
@@ -197,13 +199,14 @@ void ValvedEditor::timerCallback()
     const int semis = (int) std::lround (proc.apvts.getRawParameterValue (ParamID::transpose)->load());
     juce::String tn = tuningName (semis);
     if (semis != 0 && proc.getSampleRate() > 0 && proc.getLatencySamples() > 0)
-        tn += "   |   " + juce::String (1000.0 * proc.getLatencySamples() / proc.getSampleRate(), 0) + " ms latency";
+        tn += "\n" + juce::String (1000.0 * proc.getLatencySamples() / proc.getSampleRate(), 0) + " ms latency";
     tuningLabel.setText (tn, juce::dontSendNotification);
 
     if (page == PageCab) cabPage.refresh();
     if (page == PagePedals) pedalsPage.refresh();
     if (page == PageFx) fxPage.refresh();
     if (tunerView.isVisible()) tunerView.tick();
+    presetBar.tick();
     {
         const int q = (int) proc.apvts.getRawParameterValue (ParamID::quality)->load();
         for (int k = 0; k < 3; ++k)
@@ -228,7 +231,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.36", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.37", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawText ("QUALITY", qualityLabelArea, juce::Justification::centredRight);
 
@@ -268,7 +271,9 @@ void ValvedEditor::resized()
     row2.removeFromLeft (10);
     transpose.setBounds (row2.removeFromLeft (92));
     row2.removeFromLeft (8);
-    tuningLabel.setBounds (row2.removeFromLeft (260).withSizeKeepingCentre (260, 24).translated (0, 4));
+    tuningLabel.setBounds (row2.removeFromLeft (190).withSizeKeepingCentre (190, 40).translated (0, 4));
+    row2.removeFromLeft (8);
+    presetBar.setBounds (row2.removeFromLeft (250).withSizeKeepingCentre (250, 56).translated (0, -5));
 
     auto meters = row2.removeFromRight (44).withTrimmedTop (14).withTrimmedBottom (18);
     inMeter.setBounds (meters.removeFromLeft (14));
