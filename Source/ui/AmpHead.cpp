@@ -291,7 +291,7 @@ AmpHead::AmpHead (juce::AudioProcessorValueTreeState& s) : state (s)
     recStandby = std::make_unique<RecToggle>();
     recLedPurple = juce::ImageCache::getFromMemory (BinaryData::rec_led_purple_png, BinaryData::rec_led_purple_pngSize);
     dzBtn = std::make_unique<DzButton>();
-    dzBtn->setTooltip ("DZ MOD: pulled = DZ MOD, pressed = REC");
+    dzBtn->setTooltip ("DZ MOD: press for the DZ MOD (purple), release for the REC (red)");
     addChildComponent (*dzBtn);
     dzAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (s, ParamID::dzMod, *dzBtn);
     recPower->setTooltip ("POWER: off = amp off (no sound)");
@@ -307,22 +307,38 @@ AmpHead::AmpHead (juce::AudioProcessorValueTreeState& s) : state (s)
 
 AmpHead::DzButton::DzButton()
 {
-    pulled = juce::ImageCache::getFromMemory (BinaryData::rec_dz_on_png, BinaryData::rec_dz_on_pngSize);
-    pressed = juce::ImageCache::getFromMemory (BinaryData::rec_dz_off_png, BinaryData::rec_dz_off_pngSize);
+    // botão preto com anel de LED: solto = REC (anel vermelho), apertado = DZ MOD (anel roxo)
+    pulled = juce::ImageCache::getFromMemory (BinaryData::rec_dz_up_png, BinaryData::rec_dz_up_pngSize);
+    pressed = juce::ImageCache::getFromMemory (BinaryData::rec_dz_down_png, BinaryData::rec_dz_down_pngSize);
+    pulledDark = juce::ImageCache::getFromMemory (BinaryData::rec_dz_up_dark_png, BinaryData::rec_dz_up_dark_pngSize);
+    pressedDark = juce::ImageCache::getFromMemory (BinaryData::rec_dz_down_dark_png, BinaryData::rec_dz_down_dark_pngSize);
     setMouseCursor (juce::MouseCursor::PointingHandCursor);
 }
 
-void AmpHead::DzButton::paintButton (juce::Graphics& g, bool highlighted, bool)
+void AmpHead::DzButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
 {
-    const auto r = getLocalBounds().toFloat();
-    // sombra da base do botão no painel
-    const auto base = juce::Rectangle<float> (r.getWidth() * 1.05f, r.getWidth() * 0.42f).withCentre ({ r.getCentreX() + r.getWidth() * 0.06f, r.getBottom() - r.getWidth() * 0.16f });
-    g.setGradientFill (juce::ColourGradient (juce::Colours::black.withAlpha (0.55f), base.getCentreX(), base.getCentreY(),
-                                             juce::Colours::transparentBlack, base.getRight(), base.getCentreY(), true));
-    g.fillEllipse (base);
+    const auto b = getLocalBounds().toFloat();
+    const bool dz = getToggleState();
+    const auto r = b.withSizeKeepingCentre (b.getWidth() * 0.62f, b.getWidth() * 0.62f);   // o botão; o resto é o brilho no painel
+    const juce::Colour glow = dz ? juce::Colour (0xffa046ff) : juce::Colour (0xffff2a1a);
+    // sombra no painel (luz de cima)
+    g.setGradientFill (juce::ColourGradient (juce::Colours::black.withAlpha (0.6f), r.getCentreX(), r.getCentreY() + r.getHeight() * 0.08f,
+                                             juce::Colours::transparentBlack, r.getCentreX() + r.getWidth() * 0.62f, r.getCentreY() + r.getHeight() * 0.08f, true));
+    g.fillEllipse (r.expanded (r.getWidth() * 0.12f).translated (0.0f, r.getHeight() * 0.08f));
+    // brilho do anel de LED no metal em volta
+    if (powered)
+    {
+    g.setGradientFill (juce::ColourGradient (glow.withAlpha (0.38f), r.getCentreX(), r.getCentreY(),
+                                             glow.withAlpha (0.0f), r.getCentreX() + b.getWidth() * 0.5f, r.getCentreY(), true));
+    g.fillEllipse (b);
+    }
     g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
-    g.drawImage (getToggleState() ? pulled : pressed, r, juce::RectanglePlacement::stretchToFit);
-    if (highlighted) { g.setColour (juce::Colours::white.withAlpha (0.07f)); g.fillRoundedRectangle (r.reduced (r.getWidth() * 0.08f), r.getWidth() * 0.2f); }
+    g.drawImage (powered ? (dz ? pressed : pulled) : (dz ? pressedDark : pulledDark), r, juce::RectanglePlacement::stretchToFit);
+    if (down || highlighted)
+    {
+        g.setColour ((down ? juce::Colours::black : juce::Colours::white).withAlpha (down ? 0.18f : 0.05f));
+        g.fillEllipse (r.reduced (r.getWidth() * 0.2f));
+    }
 }
 
 AmpHead::RecToggle::RecToggle() : juce::Button ("toggle")
@@ -425,6 +441,8 @@ void AmpHead::refreshState()
     if (imageMode() && recPower->getToggleState() != powerShown)
     {
         powerShown = recPower->getToggleState();
+        dzBtn->powered = powerShown;
+        dzBtn->repaint();
         const auto& sp = spec();
         repaint (imageBox (sp.led.x, sp.led.y, sp.ledSize, sp.ledSize));
     }
@@ -494,7 +512,7 @@ void AmpHead::layoutControls()
                 k->setBounds (imageBox (sp.knobX[i], sp.knobY[i], sp.knobSize, sp.knobSize));
         recPower->setBounds (imageBox (sp.power.x, sp.power.y, sp.toggleSize.x, sp.toggleSize.y));
         recStandby->setBounds (imageBox (sp.standby.x, sp.standby.y, sp.toggleSize.x, sp.toggleSize.y));
-        if (isRecModel()) dzBtn->setBounds (imageBox (453.0f, 598.0f, 36.0f, 53.0f));
+        if (isRecModel()) dzBtn->setBounds (imageBox (447.0f, 610.0f, 40.0f, 40.0f));   // botão com metade do tamanho da luz piloto
         return;
     }
     const auto geo = computeGeometry();
@@ -544,7 +562,7 @@ void AmpHead::paint (juce::Graphics& g)
             g.drawImage (recLedPurple, imageBox (sp.led.x, sp.led.y, sp.ledSize, sp.ledSize).toFloat(), juce::RectanglePlacement::stretchToFit);
         }
         // nome embaixo do botão, no mesmo estilo do OFF das chaves
-        const auto lb = imageBox (453.0f, 665.0f, 80.0f, 22.0f).toFloat();
+        const auto lb = imageBox (447.0f, 665.0f, 80.0f, 22.0f).toFloat();
         g.setFont (Fonts::condensedBold (lb.getHeight() * 0.95f));
         g.setColour (juce::Colour (0xff2b2723).withAlpha (0.9f));
         g.drawText ("DZ MOD", lb, juce::Justification::centred);

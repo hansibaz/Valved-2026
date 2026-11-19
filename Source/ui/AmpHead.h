@@ -92,7 +92,8 @@ private:
     {
         DzButton();
         void paintButton (juce::Graphics&, bool, bool) override;
-        juce::Image pulled, pressed;
+        juce::Image pulled, pressed, pulledDark, pressedDark;
+        bool powered = true;   // com o POWER desligado o anel apaga
     };
     std::unique_ptr<DzButton> dzBtn;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> dzAtt;
