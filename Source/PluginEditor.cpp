@@ -227,11 +227,16 @@ void ValvedEditor::paint (juce::Graphics& g)
     g.fillRect (topBar.getX(), topBar.getBottom() - 1, topBar.getWidth(), 1);
     g.fillRect (topBar.getX(), 58, topBar.getWidth(), 1);
 
-    drawLogo (g, logoArea.toFloat());
+    {
+        // logo (imagem): metal escovado com o raio embaixo
+        static const juce::Image logo = juce::ImageCache::getFromMemory (BinaryData::valved_logo_png, BinaryData::valved_logo_pngSize);
+        g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+        g.drawImage (logo, logoArea.toFloat(), juce::RectanglePlacement::xLeft | juce::RectanglePlacement::yMid | juce::RectanglePlacement::onlyReduceInSize);
+    }
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.38", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.39", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawText ("QUALITY", qualityLabelArea, juce::Justification::centredRight);
 
@@ -253,7 +258,7 @@ void ValvedEditor::resized()
     mainArea = r;
 
     auto row1 = juce::Rectangle<int> (0, 0, getWidth(), 58);
-    logoArea = juce::Rectangle<int> (26, 11, 240, 36);
+    logoArea = juce::Rectangle<int> (24, 8, 214, 46);
     auto tabs = row1.withSizeKeepingCentre (440, 58);
     for (auto* t : { &pedalsTab, &ampTab, &cabTab, &fxTab })
         t->setBounds (tabs.removeFromLeft (110));
