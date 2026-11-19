@@ -1,4 +1,5 @@
 #pragma once
+#include "Lang.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 
 namespace ui

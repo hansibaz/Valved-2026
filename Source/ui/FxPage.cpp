@@ -181,7 +181,7 @@ void FxUnit::paint (juce::Graphics& g)
         // display
         drawText (g, m, shown1, Fonts::wide (34.0f), 97.0f, 500.0f, 300.0f, 42.0f, juce::Justification::centredLeft, ink);
         drawText (g, m, shown2, Fonts::condensedMedium (27.0f), 104.0f, 634.0f, 300.0f, 34.0f, juce::Justification::centredLeft, ink.withAlpha (onState ? 0.9f : 0.35f));
-        if (! onState) drawText (g, m, "BYPASS", Fonts::condensedMedium (24.0f), 318.0f, 478.0f, 76.0f, 26.0f, juce::Justification::centredRight, accentCol.withAlpha (0.8f));
+        if (! onState) drawText (g, m, lang::t ("BYPASS", "DESLIG."), Fonts::condensedMedium (24.0f), 318.0f, 478.0f, 76.0f, 26.0f, juce::Justification::centredRight, accentCol.withAlpha (0.8f));
         // divisão (sobre a caixa da foto)
         drawText (g, m, divText, Fonts::condensedMedium (28.0f), 214.0f, 1450.0f, 110.0f, 46.0f, juce::Justification::centredLeft,
                   juce::Colour (0xffffd27a).withAlpha (syncState ? 0.95f : 0.35f));
@@ -194,7 +194,7 @@ void FxUnit::paint (juce::Graphics& g)
     {
         drawText (g, m, shown1, Fonts::wide (36.0f), 98.0f, 450.0f, 236.0f, 44.0f, juce::Justification::centredLeft, ink);
         drawText (g, m, shown2, Fonts::condensedMedium (25.0f), 88.0f, 606.0f, 336.0f, 34.0f, juce::Justification::centredLeft, ink.withAlpha (onState ? 0.9f : 0.35f));
-        drawText (g, m, onState ? "ON" : "BYPASS", Fonts::condensedBold (22.0f), 340.0f, 435.0f, 78.0f, 33.0f, juce::Justification::centred,
+        drawText (g, m, onState ? lang::t ("ON", "LIGADO") : lang::t ("BYPASS", "DESLIG."), Fonts::condensedBold (22.0f), 340.0f, 435.0f, 78.0f, 33.0f, juce::Justification::centred,
                   onState ? accentCol.withAlpha (0.9f) : juce::Colours::white.withAlpha (0.6f));
         // o SHIMMER 5TH não está na foto: entra embaixo de GATED, no mesmo estilo
         const auto r = itemRect (5);
@@ -231,14 +231,14 @@ juce::String FxUnit::displayLine2() const
     if (kind == DelayUnit)
     {
         const float ms = proc.getEffectiveDelayMs();
-        const juce::String mix = "MIX " + juce::String ((int) s.getRawParameterValue (ParamID::dlyMix)->load()) + "%";
+        const juce::String mix = lang::t ("MIX ", "MIX ") + juce::String ((int) s.getRawParameterValue (ParamID::dlyMix)->load()) + "%";
         if (s.getRawParameterValue (ParamID::dlySync)->load() > 0.5f)
             return juce::String (ms, 0) + " ms @ " + juce::String (proc.getBpm(), 0) + "   " + mix;
         return juce::String (ms, 0) + " ms     " + mix;
     }
     const int t = (int) s.getRawParameterValue (ParamID::revType)->load();
     const float secs = vlv::AmbientReverb::decaySeconds (t, s.getRawParameterValue (ParamID::revDecay)->load());
-    return "DECAY " + juce::String (secs, 1) + " s   PRE " + juce::String ((int) s.getRawParameterValue (ParamID::revPre)->load())
+    return lang::t ("DECAY ", "CAUDA ") + juce::String (secs, 1) + lang::t (" s   PRE ", " s   PRÉ ") + juce::String ((int) s.getRawParameterValue (ParamID::revPre)->load())
            + " ms   MIX " + juce::String ((int) s.getRawParameterValue (ParamID::revMix)->load()) + "%";
 }
 
@@ -249,6 +249,7 @@ void FxUnit::refresh()
     const bool on = s.getRawParameterValue (kind == DelayUnit ? ParamID::dlyOn : ParamID::revOn)->load() > 0.5f;
     const juce::String l1 = displayLine1(), l2 = displayLine2();
     const juce::String sp = juce::String (kind == DelayUnit ? vlv::StereoDelay::paramName (type) : vlv::AmbientReverb::paramName (type)).toUpperCase();
+    const juce::String spT = lang::tr (sp);
 
     bool tl = false, sync = false;
     juce::String dv;
@@ -263,9 +264,9 @@ void FxUnit::refresh()
         tl = on && std::fmod (juce::Time::getMillisecondCounterHiRes(), period) < juce::jmin (90.0, period * 0.4);
     }
 
-    if (l1 != shown1 || l2 != shown2 || sp != specialLabel || on != onState || tl != tapLed || type != selected || sync != syncState || dv != divText)
+    if (l1 != shown1 || l2 != shown2 || spT != specialLabel || on != onState || tl != tapLed || type != selected || sync != syncState || dv != divText)
     {
-        shown1 = l1; shown2 = l2; specialLabel = sp; onState = on; tapLed = tl; selected = type; syncState = sync; divText = dv;
+        shown1 = l1; shown2 = l2; specialLabel = spT; onState = on; tapLed = tl; selected = type; syncState = sync; divText = dv;
         repaint();
     }
 }
@@ -413,8 +414,9 @@ void EqUnit::paint (juce::Graphics& g)
     label (rv, "VALVED", mode == 0);
     label (rm, "MARK", mode == 1);
     // rótulos das bandas
-    static const char* vl[8] = { "80", "200", "400", "800", "1k6", "3k2", "6k4", "LEVEL" };
-    static const char* ml[8] = { "80", "240", "750", "2200", "6600", "", "", "LEVEL" };
+    const juce::String lvl = lang::t ("LEVEL", "NÍVEL");
+    const juce::String vl[8] = { "80", "200", "400", "800", "1k6", "3k2", "6k4", lvl };
+    const juce::String ml[8] = { "80", "240", "750", "2200", "6600", "", "", lvl };
     static const float trackX[8] = { 172.0f, 240.0f, 310.0f, 380.0f, 450.0f, 520.0f, 590.0f, 695.0f };
     for (int i = 0; i < 8; ++i)
     {
@@ -440,7 +442,7 @@ void FxPage::paint (juce::Graphics& g)
 {
     g.setColour (textDim);
     g.setFont (Fonts::condensed (16.0f));
-    g.drawText ("AMP  >  CAB  >  EQ  >  DELAY  >  REVERB  >  OUTPUT", getLocalBounds().removeFromTop (30).translated (0, 8), juce::Justification::centred);
+    g.drawText (lang::t ("AMP  >  CAB  >  EQ  >  DELAY  >  REVERB  >  OUTPUT", "AMP  >  CAIXA  >  EQ  >  DELAY  >  REVERB  >  SAÍDA"), getLocalBounds().removeFromTop (30).translated (0, 8), juce::Justification::centred);
 }
 
 void FxPage::resized()

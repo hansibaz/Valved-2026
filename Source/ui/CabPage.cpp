@@ -391,7 +391,7 @@ void SpeakerView::paint (juce::Graphics& g)
         g.fillRoundedRectangle (getLocalBounds().toFloat(), 22.0f);
         g.setColour (textDim);
         g.setFont (Fonts::condensed (18.0f));
-        g.drawFittedText ("Mic position is part of your IR", getLocalBounds().reduced (60), juce::Justification::centred, 2);
+        g.drawFittedText (lang::t ("Mic position is part of your IR", "A posição do microfone já faz parte do seu IR"), getLocalBounds().reduced (60), juce::Justification::centred, 2);
         return;
     }
 
@@ -566,7 +566,7 @@ void CabPage::setCab (int i)
 
 void CabPage::chooseIR()
 {
-    chooser = std::make_unique<juce::FileChooser> ("Choose an impulse response (.wav)",
+    chooser = std::make_unique<juce::FileChooser> (lang::t ("Choose an impulse response (.wav)", "Escolha uma resposta ao impulso (.wav)"),
                                                    juce::File::getSpecialLocation (juce::File::userHomeDirectory),
                                                    "*.wav;*.aif;*.aiff");
     chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
@@ -583,7 +583,7 @@ void CabPage::refresh()
     for (int i = 0; i < cabButtons.size(); ++i)
         cabButtons[i]->setToggleState (i == cab, juce::dontSendNotification);
     const auto name = proc.getUserIRName();
-    irName.setText (name.isEmpty() ? juce::String ("No IR loaded") : name, juce::dontSendNotification);
+    irName.setText (name.isEmpty() ? lang::t ("No IR loaded", "Nenhum IR carregado") : name, juce::dontSendNotification);
     const bool user = cab == vlv::CabUserIR;
     if (! user) lastBuiltInCab = cab;
     irSwitch.setToggleState (user && name.isNotEmpty(), juce::dontSendNotification);
@@ -624,11 +624,11 @@ void CabPage::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensedBold (15.0f));
-    g.drawText ("CABINET", left.reduced (22).removeFromTop (24), juce::Justification::centredLeft);
+    g.drawText (lang::t ("CABINET", "GABINETE"), left.reduced (22).removeFromTop (24), juce::Justification::centredLeft);
     g.setFont (Fonts::condensedBold (12.0f));
-    g.drawText ("CAB SIM", juce::Rectangle<int> (cabOn.getX() - 64, cabOn.getY(), 58, cabOn.getHeight()), juce::Justification::centredRight);
+    g.drawFittedText (lang::t ("CAB SIM", "SIMULAÇÃO"), juce::Rectangle<int> (cabOn.getX() - 64, cabOn.getY(), 58, cabOn.getHeight()), juce::Justification::centredRight, 1, 0.7f);
     g.setFont (Fonts::condensedBold (15.0f));
-    g.drawText ("IMPULSE RESPONSE", juce::Rectangle<int> (left.getX() + 22, loadIR.getY() - 28, 200, 20), juce::Justification::centredLeft);
+    g.drawText (lang::t ("IMPULSE RESPONSE", "RESPOSTA AO IMPULSO (IR)"), juce::Rectangle<int> (left.getX() + 22, loadIR.getY() - 28, 200, 20), juce::Justification::centredLeft);
 
     // Chave do IR: estado
     {
@@ -640,35 +640,35 @@ void CabPage::paint (juce::Graphics& g)
         g.drawText ("IR", t.removeFromTop (t.getHeight() / 2).withTrimmedTop (6), juce::Justification::bottomLeft);
         g.setFont (Fonts::condensed (13.0f));
         g.setColour (onIR ? juce::Colour (0xff3cff7a) : textDim);
-        g.drawText (onIR ? "ON  -  using your IR" : (loaded ? "OFF  -  built-in cabinet" : "No IR loaded"), t.withTrimmedBottom (6), juce::Justification::topLeft);
+        g.drawText (onIR ? lang::t ("ON  -  using your IR", "LIGADO  -  usando o seu IR") : (loaded ? lang::t ("OFF  -  built-in cabinet", "DESLIGADO  -  caixa do plugin") : lang::t ("No IR loaded", "Nenhum IR carregado")), t.withTrimmedBottom (6), juce::Justification::topLeft);
     }
 
     // Painel do microfone
     auto mp = micPanel.reduced (18);
     g.setColour (textDim);
     g.setFont (Fonts::condensedBold (15.0f));
-    g.drawText ("MICROPHONE", mp.removeFromTop (24), juce::Justification::centredLeft);
+    g.drawText (lang::t ("MICROPHONE", "MICROFONE"), mp.removeFromTop (24), juce::Justification::centredLeft);
 
     const float md = proc.apvts.getRawParameterValue (ParamID::micDist)->load();
     const float ma = proc.apvts.getRawParameterValue (ParamID::micAngle)->load();
     auto dl = distance.getBounds();
     g.setFont (Fonts::condensedBold (14.0f));
-    g.drawText ("DISTANCE  " + juce::String (juce::roundToInt (vlv::mics::distanceMm (md))) + " mm",
+    g.drawText (lang::t ("DISTANCE  ", "DISTÂNCIA  ") + juce::String (juce::roundToInt (vlv::mics::distanceMm (md))) + " mm",
                 dl.withY (dl.getY() - 20).withHeight (18), juce::Justification::centredLeft);
     g.setFont (Fonts::condensed (13.0f));
-    g.drawText ("ON GRILLE", dl.withY (dl.getBottom()).withHeight (16), juce::Justification::centredLeft);
+    g.drawText (lang::t ("ON GRILLE", "NA TELA"), dl.withY (dl.getBottom()).withHeight (16), juce::Justification::centredLeft);
     g.drawText ("30 cm", dl.withY (dl.getBottom()).withHeight (16), juce::Justification::centredRight);
     auto al = angle.getBounds();
     g.setFont (Fonts::condensedBold (14.0f));
-    g.drawText ("ANGLE  " + juce::String (juce::roundToInt (ma)) + juce::String (juce::CharPointer_UTF8 ("\xc2\xb0")),
+    g.drawText (lang::t ("ANGLE  ", "ÂNGULO  ") + juce::String (juce::roundToInt (ma)) + juce::String (juce::CharPointer_UTF8 ("\xc2\xb0")),
                 al.withY (al.getY() - 20).withHeight (18), juce::Justification::centredLeft);
     g.setFont (Fonts::condensed (13.0f));
-    g.drawText ("ON AXIS", al.withY (al.getBottom()).withHeight (16), juce::Justification::centredLeft);
+    g.drawText (lang::t ("ON AXIS", "NO EIXO"), al.withY (al.getBottom()).withHeight (16), juce::Justification::centredLeft);
     g.drawText (juce::String (juce::CharPointer_UTF8 ("90\xc2\xb0")), al.withY (al.getBottom()).withHeight (16), juce::Justification::centredRight);
 
     g.setColour (textDim.withAlpha (0.8f));
     g.setFont (Fonts::condensed (13.5f));
-    g.drawFittedText ("Drag the mic on the speaker:\ncenter = brighter, edge = darker",
+    g.drawFittedText (lang::t ("Drag the mic on the speaker:\ncenter = brighter, edge = darker", "Arraste o microfone no falante:\ncentro = mais brilho, borda = mais escuro"),
                       micPanel.reduced (18).removeFromBottom (40), juce::Justification::centredLeft, 2);
 }
 

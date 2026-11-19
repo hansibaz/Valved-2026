@@ -17,8 +17,8 @@ public:
     TopKnob (juce::AudioProcessorValueTreeState& s, const char* paramId, const juce::String& name);
     void resized() override;
     juce::Slider slider;
-private:
     juce::Label label;
+private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
 };
 
@@ -43,6 +43,15 @@ public:
     enum Page { PagePedals = 0, PageAmp, PageCab, PageFx };
     void showPage (int page);
     void refreshNow() { timerCallback(); }
+    void refreshLanguage();
+
+    // bandeirinha do seletor de idioma
+    struct FlagButton : public juce::Button
+    {
+        explicit FlagButton (int l) : juce::Button ("flag"), language (l) { setMouseCursor (juce::MouseCursor::PointingHandCursor); }
+        void paintButton (juce::Graphics&, bool, bool) override;
+        int language;
+    };
     void layoutHead();
 
 private:
@@ -55,6 +64,7 @@ private:
     juce::TextButton pedalsTab { "PEDALS" }, ampTab { "AMP" }, cabTab { "CAB" }, fxTab { "FX" };
     TopKnob input, gate, transpose, output;
     juce::Label tuningLabel;
+    FlagButton flagEn { lang::English }, flagPt { lang::Portuguese };
     PresetBar presetBar;
     juce::TextButton tunerBtn { "TUNER" };
     juce::TextButton qualityBtn[3] { juce::TextButton ("LOW"), juce::TextButton ("MED"), juce::TextButton ("HIGH") };

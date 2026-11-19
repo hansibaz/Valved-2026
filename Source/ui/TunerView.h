@@ -82,7 +82,7 @@ public:
         auto inner = panelR.reduced (30.0f, 18.0f);
         g.setFont (Fonts::condensedBold (14.0f));
         g.setColour (textDim);
-        g.drawText ("TUNER", inner.removeFromTop (18.0f), juce::Justification::centredLeft);
+        g.drawText (lang::t ("TUNER", "AFINADOR"), inner.removeFromTop (18.0f), juce::Justification::centredLeft);
 
         // ---- Nota
         auto noteArea = inner.removeFromTop (150.0f);
@@ -118,8 +118,8 @@ public:
         auto info = inner.removeFromTop (30.0f);
         g.setFont (Fonts::condensed (22.0f));
         g.setColour (shown ? text : textDim);
-        const juce::String hz = shown ? juce::String (reading.freq, 2) + " Hz" : juce::String ("PLAY A SINGLE NOTE");
-        const juce::String ct = shown ? (reading.cents >= 0 ? "+" : "") + juce::String (reading.cents, 1) + " cents" : juce::String();
+        const juce::String hz = shown ? juce::String (reading.freq, 2) + " Hz" : lang::t ("PLAY A SINGLE NOTE", "TOQUE UMA NOTA DE CADA VEZ");
+        const juce::String ct = shown ? (reading.cents >= 0 ? "+" : "") + juce::String (reading.cents, 1) + lang::t (" cents", " cents") : juce::String();
         g.drawText (hz, info.withTrimmedRight (info.getWidth() * 0.5f + 20.0f), juce::Justification::centredRight);
         g.setColour (shown ? stateCol : textDim);
         g.drawText (ct, info.withTrimmedLeft (info.getWidth() * 0.5f + 20.0f), juce::Justification::centredLeft);

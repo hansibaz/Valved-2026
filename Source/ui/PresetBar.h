@@ -68,7 +68,7 @@ public:
         }
         g.setFont (Fonts::condensedMedium (16.0f));
         g.setColour (juce::Colours::white.withAlpha (0.92f));
-        juce::String nm = shownName.isEmpty() ? juce::String ("No preset") : shownName;
+        juce::String nm = shownName.isEmpty() ? lang::t ("No preset", "Sem preset") : shownName;
         if (shownModified) nm << " *";
         g.drawFittedText (nm, t.toNearestInt(), juce::Justification::centredLeft, 1, 0.75f);
         // legenda
@@ -88,7 +88,7 @@ private:
     {
         juce::PopupMenu m, user;
         const int cur = pm.currentIndex();
-        m.addSectionHeader ("FACTORY");
+        m.addSectionHeader (lang::t ("FACTORY", "FÁBRICA"));
         const auto fn = PresetManager::factoryNames();
         for (int i = 0; i < PresetManager::NumFactory; ++i)
             m.addItem (1 + i, fn[i], true, cur == i);
@@ -96,18 +96,18 @@ private:
         for (int s = 0; s < PresetManager::NumUser; ++s)
         {
             const auto nm = pm.userName (s);
-            const auto label = juce::String (s + 1).paddedLeft ('0', 2) + "   " + (nm.isEmpty() ? juce::String ("(empty)") : nm);
+            const auto label = juce::String (s + 1).paddedLeft ('0', 2) + "   " + (nm.isEmpty() ? lang::t ("(empty)", "(vazio)") : nm);
             user.addItem (1 + PresetManager::NumFactory + s, label, nm.isNotEmpty(), cur == PresetManager::NumFactory + s);
             if (nm.isNotEmpty()) ++filled;
         }
         m.addSeparator();
-        m.addSectionHeader ("USER  (" + juce::String (filled) + " / " + juce::String (PresetManager::NumUser) + ")");
-        m.addSubMenu ("User presets", user);
+        m.addSectionHeader (lang::t ("USER  (", "USUÁRIO  (") + juce::String (filled) + " / " + juce::String (PresetManager::NumUser) + ")");
+        m.addSubMenu (lang::t ("User presets", "Presets do usuário"), user);
         m.addSeparator();
-        m.addItem (1000, "Save...");
+        m.addItem (1000, lang::t ("Save...", "Salvar..."));
         const bool isUser = cur >= PresetManager::NumFactory;
-        m.addItem (1001, "Delete \"" + pm.currentName() + "\"", isUser);
-        m.addItem (1002, "Open presets folder");
+        m.addItem (1001, lang::t ("Delete \"", "Apagar \"") + pm.currentName() + "\"", isUser);
+        m.addItem (1002, lang::t ("Open presets folder", "Abrir a pasta dos presets"));
 
         m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withMinimumWidth (getWidth()),
                          [safe = juce::Component::SafePointer<PresetBar> (this)] (int r)
@@ -124,7 +124,7 @@ private:
 
     void openSave()
     {
-        auto* w = new juce::AlertWindow ("Save preset", "Choose a name and one of the 50 user slots.", juce::MessageBoxIconType::NoIcon, this);
+        auto* w = new juce::AlertWindow (lang::t ("Save preset", "Salvar preset"), lang::t ("Choose a name and one of the 50 user slots.", "Escolha um nome e um dos 50 espaços do usuário."), juce::MessageBoxIconType::NoIcon, this);
         const int cur = pm.currentIndex();
         int defSlot = cur >= PresetManager::NumFactory ? cur - PresetManager::NumFactory : -1;
         juce::StringArray slots;
@@ -135,23 +135,23 @@ private:
             slots.add (juce::String (s + 1).paddedLeft ('0', 2) + "   " + (nm.isEmpty() ? juce::String ("(empty)") : nm));
         }
         if (defSlot < 0) defSlot = 0;
-        w->addTextEditor ("name", pm.currentName().isEmpty() ? juce::String ("My preset") : pm.currentName(), "Name");
-        w->addComboBox ("slot", slots, "Slot");
+        w->addTextEditor ("name", pm.currentName().isEmpty() ? lang::t ("My preset", "Meu preset") : pm.currentName(), lang::t ("Name", "Nome"));
+        w->addComboBox ("slot", slots, lang::t ("Slot", "Espaço"));
         w->getComboBoxComponent ("slot")->setSelectedItemIndex (defSlot);
-        w->addButton ("SAVE", 1, juce::KeyPress (juce::KeyPress::returnKey));
-        w->addButton ("CANCEL", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+        w->addButton (lang::t ("SAVE", "SALVAR"), 1, juce::KeyPress (juce::KeyPress::returnKey));
+        w->addButton (lang::t ("CANCEL", "CANCELAR"), 0, juce::KeyPress (juce::KeyPress::escapeKey));
         w->enterModalState (true, juce::ModalCallbackFunction::create ([safe = juce::Component::SafePointer<PresetBar> (this), w] (int r)
         {
             if (safe == nullptr || r != 1) return;
             auto name = w->getTextEditorContents ("name").trim();
-            if (name.isEmpty()) name = "My preset";
+            if (name.isEmpty()) name = lang::t ("My preset", "Meu preset");
             const int slot = w->getComboBoxComponent ("slot")->getSelectedItemIndex();
             if (safe->pm.userExists (slot) && slot != safe->pm.currentIndex() - PresetManager::NumFactory)
             {
                 const auto old = safe->pm.userName (slot);
-                juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon, "Replace preset?",
-                    "Slot " + juce::String (slot + 1).paddedLeft ('0', 2) + " already has \"" + old + "\". Replace it with \"" + name + "\"?",
-                    "REPLACE", "CANCEL", safe.getComponent(),
+                juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon, lang::t ("Replace preset?", "Substituir preset?"),
+                    lang::t ("Slot ", "O espaço ") + juce::String (slot + 1).paddedLeft ('0', 2) + lang::t (" already has \"", " já tem \"") + old + lang::t ("\". Replace it with \"", "\". Substituir por \"") + name + "\"?",
+                    lang::t ("REPLACE", "SUBSTITUIR"), lang::t ("CANCEL", "CANCELAR"), safe.getComponent(),
                     juce::ModalCallbackFunction::create ([safe, slot, name] (int ok)
                     {
                         if (safe != nullptr && ok == 1) { safe->pm.save (slot, name); safe->repaint(); }
@@ -167,9 +167,9 @@ private:
     {
         const int slot = pm.currentIndex() - PresetManager::NumFactory;
         if (slot < 0) return;
-        juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::WarningIcon, "Delete preset?",
-            "Delete \"" + pm.currentName() + "\" from slot " + juce::String (slot + 1).paddedLeft ('0', 2) + "?",
-            "DELETE", "CANCEL", this,
+        juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::WarningIcon, lang::t ("Delete preset?", "Apagar preset?"),
+            lang::t ("Delete \"", "Apagar \"") + pm.currentName() + lang::t ("\" from slot ", "\" do espaço ") + juce::String (slot + 1).paddedLeft ('0', 2) + "?",
+            lang::t ("DELETE", "APAGAR"), lang::t ("CANCEL", "CANCELAR"), this,
             juce::ModalCallbackFunction::create ([safe = juce::Component::SafePointer<PresetBar> (this), slot] (int ok)
             {
                 if (safe != nullptr && ok == 1) { safe->pm.remove (slot); safe->repaint(); }

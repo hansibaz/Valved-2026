@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Valved VERSION 0.42.0)
+project(Valved VERSION 0.43.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -141,6 +141,10 @@ target_sources(Valved PRIVATE
     Source/ui/FxPage.cpp)
 
 target_include_directories(Valved PRIVATE Source ThirdParty)
+
+if (MSVC)
+    target_compile_options(Valved PRIVATE /utf-8)   # textos em português (acentos) no código
+endif()
 
 target_compile_definitions(Valved PUBLIC
     JUCE_WEB_BROWSER=0

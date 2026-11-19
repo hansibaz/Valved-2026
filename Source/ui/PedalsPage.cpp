@@ -270,10 +270,10 @@ void PedalsPage::paint (juce::Graphics& g)
     // Texto de orientação
     g.setColour (textDim);
     g.setFont (Fonts::condensed (16.0f));
-    g.drawText ("GUITAR  >  CHORUS  >  GREEN  >  YELLOW  >  GOLD  >  BLUE  >  AMP", getLocalBounds().removeFromTop (30).translated (0, 8), juce::Justification::centred);
+    g.drawText (lang::t ("GUITAR  >  CHORUS  >  GREEN  >  YELLOW  >  GOLD  >  BLUE  >  AMP", "GUITARRA  >  CHORUS  >  GREEN  >  YELLOW  >  GOLD  >  BLUE  >  AMP"), getLocalBounds().removeFromTop (30).translated (0, 8), juce::Justification::centred);
     g.setColour (textDim.withAlpha (0.7f));
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("Tip: low drive + high level = clean boost that tightens and pushes the amp",
+    g.drawText (lang::t ("Tip: low drive + high level = clean boost that tightens and pushes the amp", "Dica: drive baixo + level alto = boost limpo, que deixa o amp mais firme e empurra o ganho"),
                 getLocalBounds().removeFromTop (30).translated (0, 30), juce::Justification::centred);
     // Pedalboard: ripas de alumínio escuro
     const auto b = board;
@@ -341,6 +341,6 @@ void PedalsPage::paintOverChildren (juce::Graphics& g)
 
     g.setFont (Fonts::condensedBold (13.0f));
     g.setColour (textDim);
-    g.drawText ("GUITAR", juce::Rectangle<float> (board.getX() + 10.0f, in.y - 40.0f, 80.0f, 16.0f), juce::Justification::centredLeft);
-    g.drawText ("TO AMP", juce::Rectangle<float> (board.getRight() - 90.0f, out.y - 40.0f, 80.0f, 16.0f), juce::Justification::centredRight);
+    g.drawText (lang::t ("GUITAR", "GUITARRA"), juce::Rectangle<float> (board.getX() + 10.0f, in.y - 40.0f, 80.0f, 16.0f), juce::Justification::centredLeft);
+    g.drawText (lang::t ("TO AMP", "PARA O AMP"), juce::Rectangle<float> (board.getRight() - 90.0f, out.y - 40.0f, 80.0f, 16.0f), juce::Justification::centredRight);
 }

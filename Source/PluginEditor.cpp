@@ -71,8 +71,15 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
     tuningLabel.setFont (Fonts::condensed (15.0f));
     tuningLabel.setColour (juce::Label::textColourId, accent);
     tuningLabel.setJustificationType (juce::Justification::centredLeft);
-    addAndMakeVisible (tuningLabel);
+    addChildComponent (tuningLabel);   // (texto da afinação removido do cabeçalho: o próprio knob TRANSPOSE já mostra os semitons)
     addAndMakeVisible (presetBar);
+
+    for (auto* f : { &flagEn, &flagPt })
+    {
+        addAndMakeVisible (f);
+        f->setTooltip (f->language == lang::English ? "English" : "Portuguese (Brazil)");
+        f->onClick = [this, f] { lang::set (f->language); refreshLanguage(); };
+    }
 
     tunerBtn.setClickingTogglesState (true);
     tunerBtn.setTooltip ("Tuner");
@@ -138,6 +145,7 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
     setSize (1100, 720);
     showPage (PageAmp);
     startTimerHz (30);
+    refreshLanguage();
     timerCallback();
 }
 
@@ -167,12 +175,73 @@ void ValvedEditor::showPage (int newPage)
 juce::String ValvedEditor::tuningName (int semis)
 {
     static const char* notes[] = { "C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B" };
-    if (semis == 0) return "E Standard (no shift)";
+    if (semis == 0) return lang::t ("E Standard (no shift)", "Afinação padrão em E");
     const int idx = ((4 + semis) % 12 + 12) % 12;
     const int a = std::abs (semis);
+    if (lang::pt())
+    {
+        const juce::String amount = a == 12 ? juce::String ("1 oitava") : juce::String (a) + (a == 1 ? " semitom" : " semitons");
+        return juce::String (juce::CharPointer_UTF8 ("Afinação em ")) + notes[idx] + "  (" + amount + (semis < 0 ? " abaixo)" : " acima)");
+    }
     juce::String amount = a == 12 ? juce::String ("1 octave")
                                   : juce::String (a) + (a == 1 ? " semitone" : " semitones");
     return juce::String (notes[idx]) + " Standard  (" + amount + (semis < 0 ? " down)" : " up)");
+}
+
+void ValvedEditor::FlagButton::paintButton (juce::Graphics& g, bool highlighted, bool)
+{
+    const bool sel = lang::current() == language;
+    auto r = getLocalBounds().toFloat().reduced (2.0f);
+    juce::Graphics::ScopedSaveState ss (g);
+    juce::Path clip; clip.addRoundedRectangle (r, 2.5f);
+    g.reduceClipRegion (clip);
+    if (language == lang::Portuguese)
+    {
+        g.setColour (juce::Colour (0xff009c3b)); g.fillRect (r);
+        juce::Path d; const auto c = r.getCentre();
+        d.addQuadrilateral (c.x, r.getY() + r.getHeight() * 0.12f, r.getRight() - r.getWidth() * 0.09f, c.y,
+                            c.x, r.getBottom() - r.getHeight() * 0.12f, r.getX() + r.getWidth() * 0.09f, c.y);
+        g.setColour (juce::Colour (0xffffdf00)); g.fillPath (d);
+        const float cr = r.getHeight() * 0.27f;
+        g.setColour (juce::Colour (0xff002776)); g.fillEllipse (c.x - cr, c.y - cr, 2 * cr, 2 * cr);
+        g.setColour (juce::Colours::white.withAlpha (0.9f));
+        juce::Path band; band.addCentredArc (c.x + cr * 0.2f, c.y + cr * 1.6f, cr * 1.9f, cr * 1.9f, 0.0f, -0.62f, 0.5f, true);
+        g.strokePath (band, juce::PathStrokeType (r.getHeight() * 0.06f), {});
+    }
+    else
+    {
+        const float sh = r.getHeight() / 13.0f;
+        for (int i = 0; i < 13; ++i)
+        {
+            g.setColour (i % 2 == 0 ? juce::Colour (0xffb22234) : juce::Colours::white);
+            g.fillRect (r.getX(), r.getY() + sh * (float) i, r.getWidth(), sh + 0.5f);
+        }
+        const auto canton = juce::Rectangle<float> (r.getX(), r.getY(), r.getWidth() * 0.42f, sh * 7.0f);
+        g.setColour (juce::Colour (0xff3c3b6e)); g.fillRect (canton);
+        g.setColour (juce::Colours::white.withAlpha (0.85f));
+        for (int y = 0; y < 3; ++y) for (int x = 0; x < 4; ++x)
+            g.fillEllipse (canton.getX() + canton.getWidth() * (0.14f + 0.24f * (float) x) - 0.6f, canton.getY() + canton.getHeight() * (0.2f + 0.3f * (float) y) - 0.6f, 1.2f, 1.2f);
+    }
+    if (! sel) { g.setColour (juce::Colours::black.withAlpha (highlighted ? 0.35f : 0.55f)); g.fillRect (r); }
+}
+
+void ValvedEditor::refreshLanguage()
+{
+    input.label.setText (lang::t ("INPUT", "ENTRADA"), juce::dontSendNotification);
+    gate.label.setText ("GATE", juce::dontSendNotification);
+    transpose.label.setText (lang::t ("TRANSPOSE", "TRANSPOR"), juce::dontSendNotification);
+    output.label.setText (lang::t ("OUTPUT", "SAÍDA"), juce::dontSendNotification);
+    const char* qEn[3] = { "LOW", "MED", "HIGH" };
+    const char* qPt[3] = { "BAIXA", "MÉDIA", "ALTA" };
+    for (int q = 0; q < 3; ++q)
+    {
+        qualityBtn[q].getProperties().set ("noTr", true);
+        qualityBtn[q].setButtonText (lang::t (qEn[q], qPt[q]));
+    }
+    lang::applyTree (*this);
+    timerCallback();
+    repaint();
+    for (auto* c : getChildren()) c->repaint();
 }
 
 // Amps com foto (REC): a imagem ocupa a área toda e os botões ficam por cima dela.
@@ -199,7 +268,7 @@ void ValvedEditor::timerCallback()
     const int semis = (int) std::lround (proc.apvts.getRawParameterValue (ParamID::transpose)->load());
     juce::String tn = tuningName (semis);
     if (semis != 0 && proc.getSampleRate() > 0 && proc.getLatencySamples() > 0)
-        tn += "\n" + juce::String (1000.0 * proc.getLatencySamples() / proc.getSampleRate(), 0) + " ms latency";
+        tn += "\n" + juce::String (1000.0 * proc.getLatencySamples() / proc.getSampleRate(), 0) + lang::t (" ms latency", " ms de latência");
     tuningLabel.setText (tn, juce::dontSendNotification);
 
     if (page == PageCab) cabPage.refresh();
@@ -236,13 +305,13 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.42", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.43", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
     g.setFont (Fonts::condensedBold (12.0f));
-    g.drawText ("QUALITY", qualityLabelArea, juce::Justification::centredRight);
+    g.drawFittedText (lang::t ("QUALITY", "QUALIDADE"), qualityLabelArea, juce::Justification::centredRight, 1, 0.8f);
 
     g.setFont (Fonts::condensedBold (12.0f));
-    g.drawText ("IN", inMeter.getBounds().translated (0, inMeter.getHeight() + 2).withHeight (12).expanded (8, 0), juce::Justification::centred);
-    g.drawText ("OUT", outMeter.getBounds().translated (0, outMeter.getHeight() + 2).withHeight (12).expanded (8, 0), juce::Justification::centred);
+    g.drawText (lang::t ("IN", "ENT"), inMeter.getBounds().translated (0, inMeter.getHeight() + 2).withHeight (12).expanded (8, 0), juce::Justification::centred);
+    g.drawText (lang::t ("OUT", "SAÍ"), outMeter.getBounds().translated (0, outMeter.getHeight() + 2).withHeight (12).expanded (8, 0), juce::Justification::centred);
 
     // Fundo do palco (leve iluminação no centro)
     juce::ColourGradient stage (juce::Colour (0xff1d1d22), (float) mainArea.getCentreX(), (float) mainArea.getY() + 40.0f,
@@ -259,6 +328,8 @@ void ValvedEditor::resized()
 
     auto row1 = juce::Rectangle<int> (0, 0, getWidth(), 58);
     logoArea = juce::Rectangle<int> (30, 17, 128, 28);   // discreto: ~28 px de altura
+    flagEn.setBounds (184, 20, 28, 20);
+    flagPt.setBounds (216, 20, 28, 20);
     auto tabs = row1.withSizeKeepingCentre (440, 58);
     for (auto* t : { &pedalsTab, &ampTab, &cabTab, &fxTab })
         t->setBounds (tabs.removeFromLeft (110));
@@ -275,10 +346,7 @@ void ValvedEditor::resized()
     gate.setBounds (row2.removeFromLeft (92));
     row2.removeFromLeft (10);
     transpose.setBounds (row2.removeFromLeft (92));
-    row2.removeFromLeft (8);
-    tuningLabel.setBounds (row2.removeFromLeft (190).withSizeKeepingCentre (190, 40).translated (0, 4));
-    row2.removeFromLeft (8);
-    presetBar.setBounds (row2.removeFromLeft (250).withSizeKeepingCentre (250, 56).translated (0, -5));
+    tuningLabel.setBounds (0, 0, 0, 0);
 
     auto meters = row2.removeFromRight (44).withTrimmedTop (14).withTrimmedBottom (18);
     inMeter.setBounds (meters.removeFromLeft (14));
@@ -288,6 +356,8 @@ void ValvedEditor::resized()
     output.setBounds (row2.removeFromRight (92));
     row2.removeFromRight (24);
     tunerBtn.setBounds (row2.removeFromRight (104).withSizeKeepingCentre (104, 34).translated (0, 4));
+    // presets no meio, entre o TRANSPOSE e o afinador
+    presetBar.setBounds (row2.withSizeKeepingCentre (280, 56).translated (0, -5));
 
     // Página AMP
     auto m = mainArea;
