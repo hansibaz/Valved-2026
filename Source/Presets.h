@@ -229,7 +229,6 @@ private:
             case 5: // 51 Rhythm
                 amp (2, 6.5f, 5.5f, 4.5f, 6.0f, 6.0f, 5.0f, 6.0f);
                 cab (0, 0, 0.20f);
-                pedal (0, 0.0f, 5.5f, 8.0f);   // Green Drive como boost (drive no zero)
                 set (ParamID::gate, -60.0f);
                 break;
             case 6: // 51 Lead
