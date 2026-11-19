@@ -97,7 +97,7 @@ private:
     ClearButton modeV, modeM;
     imgui::HitButton onSwitch;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> onAtt;
-    juce::Image body, btnOn, btnOff, ledOff;
+    juce::Image body, bodyMark, btnOn, btnOff, ledOff;
     int mode = -1;
     bool onState = false;
 };

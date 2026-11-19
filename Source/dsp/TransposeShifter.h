@@ -24,10 +24,7 @@ public:
         fs = sampleRate;
         buf.assign ((size_t) size, 0.0f);
         w = 0; readPos = 0; fromPos = 0; xfLeft = 0;
-        corrLen   = (int) (0.010 * fs);   // janela de comparação (10 ms)
-        search    = (int) (0.026 * fs);   // procura em ~2 ciclos do Mi grave
-        xfLen     = (int) (0.012 * fs);   // crossfade entre trechos alinhados
-        minJump   = (int) (0.004 * fs);
+        configure();
         wet = semis != 0 ? 1.0f : 0.0f;
         wetCoef = (float) std::exp (-1.0 / (0.010 * fs));
         resetPointer();
@@ -38,6 +35,7 @@ public:
         if (s == semis) return;
         semis = s;
         ratio = std::pow (2.0, s / 12.0);
+        configure();
         resetPointer();
     }
 
@@ -47,7 +45,8 @@ public:
     int getLatencySamples() const
     {
         if (semis == 0) return 0;
-        return ratio < 1.0 ? corrLen + search / 2 : xfLen + minJump + search / 2;
+        const double up = ratio > 1.0 ? (double) xfLen * (ratio - 1.0) + 4.0 : 0.0;
+        return (int) (up + minJump + search / 2);
     }
 
     inline float process (float x) noexcept
@@ -60,8 +59,8 @@ public:
             const double delay = (double) w - readPos;
             if (xfLeft <= 0)
             {
-                if (ratio < 1.0 && delay > (double) (corrLen + search + 2)) jump (false);
-                else if (ratio > 1.0 && delay < (double) xfLen * ratio + 4.0) jump (true);
+                if (ratio < 1.0 && delay > (double) (minJump + search + 3)) jump (false);
+                else if (ratio > 1.0 && delay < (double) xfLen * (ratio - 1.0) + 4.0) jump (true);
             }
 
             float s = read (readPos);
@@ -85,9 +84,22 @@ public:
     }
 
 private:
+    // Baixa latência: a comparação usa o trecho que JÁ passou (não espera amostras futuras),
+    // então o cabeçote pode ficar bem colado na entrada. Medidas por sentido (testadas com notas
+    // de 46 Hz a 330 Hz e acordes, de -12 a +12 semitons, sem perder pureza harmônica):
+    //   abaixo: ~12 ms (antes 23)   acima: ~16 ms em +2, ~27 ms em +12 (antes 29)
+    void configure()
+    {
+        const bool up = ratio > 1.0;
+        corrLen = (int) ((up ? 0.016 : 0.014) * fs);   // janela de comparação
+        search  = (int) ((up ? 0.026 : 0.020) * fs);   // procura em ~1 ciclo da corda mais grave (46 Hz)
+        xfLen   = (int) ((up ? 0.012 : 0.010) * fs);   // crossfade entre trechos alinhados
+        minJump = (int) (0.002 * fs);
+    }
+
     void resetPointer()
     {
-        const double d = ratio < 1.0 ? (double) corrLen + 2.0 : (double) (xfLen + minJump + search);
+        const double d = ratio < 1.0 ? (double) minJump + 3.0 : (double) xfLen * (ratio - 1.0) + 4.0 + minJump + search;
         readPos = (double) w - d;
         xfLeft = 0;
     }
@@ -98,20 +110,20 @@ private:
         const std::int64_t ro = (std::int64_t) std::floor (readPos);
         const std::int64_t delay = w - ro;
         std::int64_t jLo, jHi;
-        if (! backward) { jHi = delay - corrLen - 1; jLo = std::max<std::int64_t> (minJump, jHi - search); }
+        if (! backward) { jHi = delay - 3; jLo = std::max<std::int64_t> (minJump, jHi - search); }
         else            { jLo = minJump; jHi = minJump + search; }
         if (jHi <= jLo) { jLo = std::max<std::int64_t> (1, jHi - 1); }
 
         double best = -2.0; std::int64_t bestJ = jHi;
         double ea = 0.0;
-        for (int k = 0; k < corrLen; k += 2) { const float a = at (ro + k); ea += (double) a * a; }
+        for (int k = 0; k < corrLen; k += 2) { const float a = at (ro - k); ea += (double) a * a; }
         for (std::int64_t j = jLo; j <= jHi; ++j)
         {
             const std::int64_t cand = backward ? ro - j : ro + j;
             double ab = 0.0, eb = 0.0;
             for (int k = 0; k < corrLen; k += 2)
             {
-                const float a = at (ro + k), b = at (cand + k);
+                const float a = at (ro - k), b = at (cand - k);
                 ab += (double) a * b; eb += (double) b * b;
             }
             const double c = (ea > 1e-12 && eb > 1e-12) ? ab / std::sqrt (ea * eb) : 0.0;

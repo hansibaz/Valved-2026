@@ -87,6 +87,18 @@ private:
         juce::Image offImg;
     };
     void refreshImageAssets();
+    // REC: botão DZ MOD (puxado = DZ MOD / Version 2, apertado = REC Circuit)
+    struct DzButton : public juce::ToggleButton
+    {
+        DzButton();
+        void paintButton (juce::Graphics&, bool, bool) override;
+        juce::Image pulled, pressed;
+    };
+    std::unique_ptr<DzButton> dzBtn;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> dzAtt;
+    juce::Image recLedPurple;
+    bool dzShown = false;
+    bool isRecModel() const { return model == 3 || model == 4; }
     std::unique_ptr<RecToggle> recPower, recStandby;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> recPowerAtt, recStandbyAtt;
     juce::Image recBg, recBgV2, recLedOff;

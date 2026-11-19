@@ -36,6 +36,7 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
     for (auto* nm : vlv::ampNames()) ampNames.add (nm);
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::amp, 1 }, "Amp", ampNames, 1));
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { ParamID::engine, 1 }, "Amp Engine", StringArray { "Circuit", "Neural", "Version 2" }, 1));
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { ParamID::dzMod, 1 }, "REC DZ Mod", false));
 
     // Regulagem própria de cada amp (todos começam com os knobs no meio)
     for (int m = 0; m < 4; ++m)
@@ -182,6 +183,7 @@ ValvedProcessor::ValvedProcessor()
     pTranspose = apvts.getRawParameterValue (ParamID::transpose);
     pAmp       = apvts.getRawParameterValue (ParamID::amp);
     pEngine    = apvts.getRawParameterValue (ParamID::engine);
+    pDzMod     = apvts.getRawParameterValue (ParamID::dzMod);
     for (int m = 0; m < 5; ++m)
     {
         const char* knobs[] = { ParamID::gain, ParamID::bass, ParamID::mid, ParamID::treble, ParamID::presence, ParamID::master, ParamID::resonance, ParamID::powerAmp };
@@ -406,7 +408,9 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     if ((int) gateGains.size() < n) gateGains.resize ((size_t) n, 1.0f);
     gate.setThresholdDb (pGate->load());
     shifter.setSemitones ((int) std::lround (pTranspose->load()));
-    const int keyDelay = juce::jmin (shifter.getLatencySamples(), (int) gateDelay.size() - 1);
+    // o ganho também espera o atraso do amp (neural / filtros), para fechar junto com o fim da nota que sai do amp
+    const int ampLat = activeEngine() != EngineCircuit ? neuralAmp.getLatencySamples() : amp.getLatencySamples();
+    const int keyDelay = juce::jmin ((shifter.getSemitones() != 0 ? shifter.getLatencySamples() : 0) + ampLat, (int) gateDelay.size() - 1);
     const int gdMask = (int) gateDelay.size() - 1;
     for (int i = 0; i < n; ++i)
     {

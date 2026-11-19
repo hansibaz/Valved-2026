@@ -310,6 +310,7 @@ EqUnit::EqUnit (ValvedProcessor& p) : proc (p)
 {
     using namespace BinaryData;
     body = imgui::load (eq_body_png, eq_body_pngSize);
+    bodyMark = imgui::load (eq_body_mark_png, eq_body_mark_pngSize);   // MARK: só 5 trilhos, mais espaçados
     btnOn = imgui::load (eq_btn_on_png, eq_btn_on_pngSize);
     btnOff = imgui::load (eq_btn_off_png, eq_btn_off_pngSize);
     ledOff = imgui::load (eq_ledoff_png, eq_ledoff_pngSize);
@@ -383,7 +384,7 @@ void EqUnit::resized()
         f.capW = 58.0f * sc; f.capH = 33.0f * sc;
     };
     for (int i = 0; i < vFaders.size(); ++i) place (*vFaders[i], trackX[i]);
-    for (int i = 0; i < mFaders.size(); ++i) place (*mFaders[i], trackX[i]);
+    for (int i = 0; i < mFaders.size(); ++i) place (*mFaders[i], 172.0f + 104.5f * (float) i);
     place (level, trackX[7]);
     onSwitch.setBounds (m.box (410.0f, 1492.0f, 256.0f, 256.0f).toNearestInt());
 }
@@ -396,7 +397,7 @@ void EqUnit::paint (juce::Graphics& g)
         juce::Path p; p.addRoundedRectangle (r, r.getWidth() * 0.06f);
         juce::DropShadow (juce::Colours::black.withAlpha (0.8f), 24, { 0, 12 }).drawForPath (g, p);
     }
-    imgui::draw (g, body, getLocalBounds().toFloat());
+    imgui::draw (g, mode == 1 ? bodyMark : body, getLocalBounds().toFloat());
     // botões VALVED / MARK (o escolhido acende em laranja)
     const auto rv = m.rect (90.0f, 415.0f, 320.0f, 85.0f), rm = m.rect (432.0f, 415.0f, 318.0f, 85.0f);
     imgui::draw (g, mode == 0 ? btnOn : btnOff, rv);
@@ -416,8 +417,11 @@ void EqUnit::paint (juce::Graphics& g)
     static const char* ml[8] = { "80", "240", "750", "2200", "6600", "", "", "LEVEL" };
     static const float trackX[8] = { 172.0f, 240.0f, 310.0f, 380.0f, 450.0f, 520.0f, 590.0f, 695.0f };
     for (int i = 0; i < 8; ++i)
-        drawText (g, m, mode == 1 ? ml[i] : vl[i], Fonts::condensedBold (26.0f), trackX[i] - 40.0f, 1190.0f, 80.0f, 32.0f,
+    {
+        const float x = (mode == 1 && i < 5) ? 172.0f + 104.5f * (float) i : trackX[i];
+        drawText (g, m, mode == 1 ? ml[i] : vl[i], Fonts::condensedBold (26.0f), x - 40.0f, 1190.0f, 80.0f, 32.0f,
                   juce::Justification::centred, juce::Colour (0xffd5d8dc).withAlpha (i == 7 ? 0.95f : 0.8f));
+    }
     if (! onState)
         imgui::draw (g, ledOff, m.box (414.0f, 1323.0f, 52.0f, 52.0f));
 }

@@ -68,9 +68,9 @@ namespace
     const AmpHead::ImageSpec britSpec  { 1672.0f, 941.0f, 0.6f, britKnobX, britKnobY, 6, 78.0f,
                                          { 222.0f, 606.0f }, { 329.0f, 606.0f }, { 420.0f, 609.0f }, { 84.0f, 120.0f }, 60.0f };
     const AmpHead::ImageSpec recSpec   { 1672.0f, 941.0f, 0.6f, recKnobX, recKnobY, 6, recKnobSize,
-                                         { 230.0f, 616.0f }, { 333.0f, 616.0f }, { 424.0f, 610.0f }, { 60.0f, 80.0f }, 60.0f };
+                                         { 230.0f, 616.0f }, { 333.0f, 616.0f }, { 400.0f, 610.0f }, { 60.0f, 80.0f }, 60.0f };
     const AmpHead::ImageSpec recV2Spec { 1672.0f, 941.0f, 0.6f, recV2KnobX, recV2KnobY, 8, recKnobSize,
-                                         { 230.0f, 616.0f }, { 333.0f, 616.0f }, { 424.0f, 610.0f }, { 60.0f, 80.0f }, 60.0f };
+                                         { 230.0f, 616.0f }, { 333.0f, 616.0f }, { 400.0f, 610.0f }, { 60.0f, 80.0f }, 60.0f };
     const AmpHead::ImageSpec blockSpec { 1659.0f, 948.0f, 0.6f, blockKnobX, blockKnobY, 7, 100.0f,
                                          { 220.0f, 629.0f }, { 312.0f, 629.0f }, { 394.0f, 630.0f }, { 70.0f, 110.0f }, 60.0f };
     // escala da foto: 11 marcas de 0 a 10, 27° entre elas (±135° do centro)
@@ -289,6 +289,11 @@ AmpHead::AmpHead (juce::AudioProcessorValueTreeState& s) : state (s)
     britStandbyOff = juce::ImageCache::getFromMemory (BinaryData::brit_standby_off_png, BinaryData::brit_standby_off_pngSize);
     recPower = std::make_unique<RecToggle>();
     recStandby = std::make_unique<RecToggle>();
+    recLedPurple = juce::ImageCache::getFromMemory (BinaryData::rec_led_purple_png, BinaryData::rec_led_purple_pngSize);
+    dzBtn = std::make_unique<DzButton>();
+    dzBtn->setTooltip ("DZ MOD: pulled = DZ MOD, pressed = REC");
+    addChildComponent (*dzBtn);
+    dzAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (s, ParamID::dzMod, *dzBtn);
     recPower->setTooltip ("POWER: off = amp off (no sound)");
     recStandby->setTooltip ("STANDBY: off = tubes warm, no sound");
     addChildComponent (*recPower);
@@ -298,6 +303,26 @@ AmpHead::AmpHead (juce::AudioProcessorValueTreeState& s) : state (s)
 
     model = -1;
     setModel (1);
+}
+
+AmpHead::DzButton::DzButton()
+{
+    pulled = juce::ImageCache::getFromMemory (BinaryData::rec_dz_on_png, BinaryData::rec_dz_on_pngSize);
+    pressed = juce::ImageCache::getFromMemory (BinaryData::rec_dz_off_png, BinaryData::rec_dz_off_pngSize);
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+}
+
+void AmpHead::DzButton::paintButton (juce::Graphics& g, bool highlighted, bool)
+{
+    const auto r = getLocalBounds().toFloat();
+    // sombra da base do botão no painel
+    const auto base = juce::Rectangle<float> (r.getWidth() * 1.05f, r.getWidth() * 0.42f).withCentre ({ r.getCentreX() + r.getWidth() * 0.06f, r.getBottom() - r.getWidth() * 0.16f });
+    g.setGradientFill (juce::ColourGradient (juce::Colours::black.withAlpha (0.55f), base.getCentreX(), base.getCentreY(),
+                                             juce::Colours::transparentBlack, base.getRight(), base.getCentreY(), true));
+    g.fillEllipse (base);
+    g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+    g.drawImage (getToggleState() ? pulled : pressed, r, juce::RectanglePlacement::stretchToFit);
+    if (highlighted) { g.setColour (juce::Colours::white.withAlpha (0.07f)); g.fillRoundedRectangle (r.reduced (r.getWidth() * 0.08f), r.getWidth() * 0.2f); }
 }
 
 AmpHead::RecToggle::RecToggle() : juce::Button ("toggle")
@@ -382,6 +407,7 @@ void AmpHead::setModel (int m)
     refreshImageAssets();
     recPower->setVisible (imageMode());
     recStandby->setVisible (imageMode());
+    dzBtn->setVisible (isRecModel());
     for (auto* sw : switches) sw->setVisible (false);
     for (auto& c : controls())
     {
@@ -399,6 +425,12 @@ void AmpHead::refreshState()
     if (imageMode() && recPower->getToggleState() != powerShown)
     {
         powerShown = recPower->getToggleState();
+        const auto& sp = spec();
+        repaint (imageBox (sp.led.x, sp.led.y, sp.ledSize, sp.ledSize));
+    }
+    if (isRecModel() && dzBtn->getToggleState() != dzShown)
+    {
+        dzShown = dzBtn->getToggleState();
         const auto& sp = spec();
         repaint (imageBox (sp.led.x, sp.led.y, sp.ledSize, sp.ledSize));
     }
@@ -462,6 +494,7 @@ void AmpHead::layoutControls()
                 k->setBounds (imageBox (sp.knobX[i], sp.knobY[i], sp.knobSize, sp.knobSize));
         recPower->setBounds (imageBox (sp.power.x, sp.power.y, sp.toggleSize.x, sp.toggleSize.y));
         recStandby->setBounds (imageBox (sp.standby.x, sp.standby.y, sp.toggleSize.x, sp.toggleSize.y));
+        if (isRecModel()) dzBtn->setBounds (imageBox (453.0f, 598.0f, 36.0f, 53.0f));
         return;
     }
     const auto geo = computeGeometry();
@@ -500,6 +533,21 @@ void AmpHead::paint (juce::Graphics& g)
         const auto& sp = spec();
         g.drawImage (model == Brit ? britLedOff : model == Clean ? cleanLedOff : model == Block ? blockLedOff : recLedOff, imageBox (sp.led.x, sp.led.y, sp.ledSize, sp.ledSize).toFloat(),
                      juce::RectanglePlacement::stretchToFit);
+    }
+    if (isRecModel())
+    {
+        const auto& sp = spec();
+        // DZ MOD ligado: a luz piloto fica roxa
+        if (recPower->getToggleState() && dzBtn->getToggleState())
+        {
+            g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+            g.drawImage (recLedPurple, imageBox (sp.led.x, sp.led.y, sp.ledSize, sp.ledSize).toFloat(), juce::RectanglePlacement::stretchToFit);
+        }
+        // nome embaixo do botão, no mesmo estilo do OFF das chaves
+        const auto lb = imageBox (453.0f, 665.0f, 80.0f, 22.0f).toFloat();
+        g.setFont (Fonts::condensedBold (lb.getHeight() * 0.95f));
+        g.setColour (juce::Colour (0xff2b2723).withAlpha (0.9f));
+        g.drawText ("DZ MOD", lb, juce::Justification::centred);
     }
 }
 
