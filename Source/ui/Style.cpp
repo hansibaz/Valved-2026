@@ -292,11 +292,13 @@ void ValvedLook::drawAmpKnob (juce::Graphics& g, juce::Rectangle<float> r, float
 
 // Knob do REC (UI em imagem): a foto do knob de GAIN, sem o ponteiro, fica parada (a luz do
 // estúdio não gira); só a marcação gira, desenhada por cima como um risco gravado no topo do knob.
-void ValvedLook::drawRecImageKnob (juce::Graphics& g, juce::Rectangle<float> r, float angle)
+void ValvedLook::drawRecImageKnob (juce::Graphics& g, juce::Rectangle<float> r, float angle, bool gold)
 {
+    // Brit80: o mesmo knob do REC, com a tampa dourada
     static const juce::Image img = juce::ImageCache::getFromMemory (BinaryData::rec_knob_png, BinaryData::rec_knob_pngSize);
+    static const juce::Image goldImg = juce::ImageCache::getFromMemory (BinaryData::brit_knob_png, BinaryData::brit_knob_pngSize);
     g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
-    g.drawImage (img, r, juce::RectanglePlacement::stretchToFit);
+    g.drawImage (gold ? goldImg : img, r, juce::RectanglePlacement::stretchToFit);
     // a imagem cobre 70 px da foto original; o topo (cone) tem ~23,5 px de raio, levemente
     // achatado pela perspectiva, com o centro 0,7 px à esquerda e 2,7 px acima do centro do saiote
     const float k = r.getWidth() / 70.0f;
@@ -374,6 +376,8 @@ void ValvedLook::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h
         drawRecImageKnob (g, r, startAngle + pos * (endAngle - startAngle));
     else if (style == KnobBlockImage)
         drawBlockImageKnob (g, r, startAngle + pos * (endAngle - startAngle));
+    else if (style == KnobBritImage)
+        drawRecImageKnob (g, r, startAngle + pos * (endAngle - startAngle), true);
     else if (style == KnobCleanImage)
         drawCleanImageKnob (g, r, startAngle + pos * (endAngle - startAngle));
     else
