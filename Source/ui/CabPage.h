@@ -39,13 +39,15 @@ private:
     float coneRadius() const;
     void setFromMouse (juce::Point<float>);
     void renderCab();
+    juce::Rectangle<float> photoRect() const;   // onde a foto da 4x12 fica na tela
 
     juce::AudioProcessorValueTreeState& state;
     juce::RangedAudioParameter* px;
     juce::RangedAudioParameter* pd;
     float angle = -2.35f;     // só visual: o som depende da distância do centro
     bool active = true;
-    juce::Image background;
+    juce::Image background, cabPhoto;
+    juce::Image micImg[3][2];   // [modelo][0 = on axis, 1 = off axis]
 };
 
 class CabPage : public juce::Component

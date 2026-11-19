@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Valved VERSION 0.35.0)
+project(Valved VERSION 0.36.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -60,6 +60,13 @@ juce_add_binary_data(ValvedAssets SOURCES
     Resources/RecUI/rec_power_off.png
     Resources/RecUI/rec_standby_off.png
     Resources/RecUI/rec_led_off.png
+    Resources/CabUI/cab_4x12.jpg
+    Resources/CabUI/sm57_on_axis.png
+    Resources/CabUI/sm57_off_axis.png
+    Resources/CabUI/sm7b_on_axis.png
+    Resources/CabUI/sm7b_off_axis.png
+    Resources/CabUI/md421_on_axis.png
+    Resources/CabUI/md421_off_axis.png
     Resources/RecUI/rec_led_purple.png
     Resources/RecUI/rec_dz_up.png
     Resources/RecUI/rec_dz_down.png

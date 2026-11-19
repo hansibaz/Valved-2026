@@ -1,6 +1,7 @@
 #include "CabPage.h"
 #include "../PluginProcessor.h"
 #include "../dsp/CabMics.h"
+#include <BinaryData.h>
 
 using namespace ui;
 
@@ -65,6 +66,14 @@ SpeakerView::SpeakerView (juce::AudioProcessorValueTreeState& s) : state (s)
 {
     px = s.getParameter (ParamID::micX);
     pd = s.getParameter (ParamID::micDist);
+    using namespace BinaryData;
+    cabPhoto = juce::ImageCache::getFromMemory (cab_4x12_jpg, cab_4x12_jpgSize);
+    micImg[0][0] = juce::ImageCache::getFromMemory (sm57_on_axis_png, sm57_on_axis_pngSize);
+    micImg[0][1] = juce::ImageCache::getFromMemory (sm57_off_axis_png, sm57_off_axis_pngSize);
+    micImg[1][0] = juce::ImageCache::getFromMemory (sm7b_on_axis_png, sm7b_on_axis_pngSize);
+    micImg[1][1] = juce::ImageCache::getFromMemory (sm7b_off_axis_png, sm7b_off_axis_pngSize);
+    micImg[2][0] = juce::ImageCache::getFromMemory (md421_on_axis_png, md421_on_axis_pngSize);
+    micImg[2][1] = juce::ImageCache::getFromMemory (md421_off_axis_png, md421_off_axis_pngSize);
     setMouseCursor (juce::MouseCursor::DraggingHandCursor);
 }
 
@@ -341,98 +350,33 @@ namespace
     };
 }
 
+// Foto da 4x12 (recorte do canto de cima à esquerda, 710 x 720 px): falante de cima à esquerda
+// com centro em (282, 268) e raio de 182 px; o logo fica entre os 4 falantes.
+namespace { constexpr float photoW = 710.0f, photoH = 720.0f, spkX = 282.0f, spkY = 268.0f, spkR = 182.0f; }
+
+juce::Rectangle<float> SpeakerView::photoRect() const
+{
+    // cobre a área toda, presa no canto de cima à esquerda (o resto da caixa fica fora da tela)
+    const float sc = juce::jmax ((float) getWidth() / photoW, (float) getHeight() / photoH);
+    return { 0.0f, 0.0f, photoW * sc, photoH * sc };
+}
+
 juce::Point<float> SpeakerView::centre() const
 {
-    const float R = speakerRadius();
-    return { frameT + R * 1.16f, frameT + R * 1.16f };
+    const auto r = photoRect();
+    return { r.getX() + spkX / photoW * r.getWidth(), r.getY() + spkY / photoH * r.getHeight() };
 }
-float SpeakerView::speakerRadius() const
-{
-    // falante inteiro + metade do de baixo / um pedaço do da direita
-    return juce::jmin (((float) getHeight() - frameT) / 2.95f, ((float) getWidth() - frameT) / 2.75f);
-}
+float SpeakerView::speakerRadius() const { return spkR / photoW * photoRect().getWidth(); }
 float SpeakerView::coneRadius() const { return speakerRadius() * 0.80f; }
 
 void SpeakerView::renderCab()
 {
     const float scale = 2.0f;
-    const float W = (float) getWidth(), H = (float) getHeight();
-    background = juce::Image (juce::Image::ARGB, juce::jmax (1, (int) (W * scale)), juce::jmax (1, (int) (H * scale)), true);
+    background = juce::Image (juce::Image::ARGB, juce::jmax (1, (int) (getWidth() * scale)), juce::jmax (1, (int) (getHeight() * scale)), true);
     juce::Graphics g (background);
     g.addTransform (juce::AffineTransform::scale (scale));
-
-    // Caixa: tolex preto texturizado, canto arredondado (o resto da caixa continua fora da tela)
-    juce::Path cabShape;
-    cabShape.addRoundedRectangle (0.0f, 0.0f, W + 60.0f, H + 60.0f, 22.0f);
-    g.reduceClipRegion (cabShape);
-    g.setColour (juce::Colour (0xff141416));
-    g.fillPath (cabShape);
-    {
-        juce::Random rng (3);
-        for (int i = 0; i < (int) (W * H * 0.05f); ++i)
-        {
-            g.setColour ((rng.nextBool() ? juce::Colours::white : juce::Colours::black).withAlpha (0.06f + 0.05f * rng.nextFloat()));
-            g.fillRect (rng.nextFloat() * W, rng.nextFloat() * H, 1.3f, 1.3f);
-        }
-        juce::ColourGradient edge (juce::Colours::white.withAlpha (0.10f), 0.0f, 0.0f, juce::Colours::transparentWhite, 26.0f, 26.0f, false);
-        g.setGradientFill (edge);
-        g.fillRect (0.0f, 0.0f, W, 26.0f);
-        g.fillRect (0.0f, 0.0f, 26.0f, H);
-    }
-
-    // Baffle e falantes
-    juce::Path grilleShape;
-    grilleShape.addRoundedRectangle (frameT, frameT, W + 60.0f, H + 60.0f, 10.0f);
-    {
-        juce::Graphics::ScopedSaveState ss (g);
-        g.reduceClipRegion (grilleShape);
-        g.setColour (juce::Colour (0xff0c0c0d));
-        g.fillPath (grilleShape);
-        const auto c = centre();
-        const float R = speakerRadius();
-        drawSpeaker (g, c, R, 11);
-        drawSpeaker (g, c.translated (R * spacing, 0.0f), R, 23);
-        drawSpeaker (g, c.translated (0.0f, R * spacing), R, 37);
-        drawSpeaker (g, c.translated (R * spacing, R * spacing), R, 41);
-
-        // Tela (grill cloth) preta com trama prateada, semitransparente: os falantes aparecem por trás
-        g.setColour (juce::Colours::black.withAlpha (0.38f));
-        g.fillPath (grilleShape);
-        const float cell = 3.0f;
-        for (float y = frameT; y < H; y += cell)
-            for (float x = frameT; x < W; x += cell)
-            {
-                const bool h = ((int) ((x - frameT) / cell) + (int) ((y - frameT) / cell)) % 2 == 0;
-                g.setColour (juce::Colour (0xffb8b4a8).withAlpha (h ? 0.10f : 0.05f));
-                if (h) g.fillRect (x, y + cell * 0.35f, cell * 0.9f, cell * 0.3f);
-                else   g.fillRect (x + cell * 0.35f, y, cell * 0.3f, cell * 0.9f);
-            }
-        // sombra da borda sobre a tela
-        juce::ColourGradient sh (juce::Colours::black.withAlpha (0.6f), frameT, frameT, juce::Colours::transparentBlack, frameT + 16.0f, frameT + 16.0f, false);
-        g.setGradientFill (sh);
-        g.fillRect (frameT, frameT, W, 16.0f);
-        g.fillRect (frameT, frameT, 16.0f, H);
-
-        // Logo no centro da caixa (entre os 4 falantes), como nas 4x12 de verdade.
-        // Fica centralizado na caixa inteira, mesmo que a caixa não apareça toda.
-        const juce::Colour cream (0xffeee4c8);
-        const juce::Point<float> lc (c.x + R * spacing * 0.5f, c.y + R * spacing * 0.5f);
-        auto logoR = juce::Rectangle<float> (R * 2.4f, R * 0.7f).withCentre (lc);
-        {
-            auto f = ui::Fonts::logo (100.0f);
-            const float wAt100 = f.getStringWidthFloat ("Valved") * 1.08f;
-            g.setFont (ui::Fonts::logo (juce::jmin (logoR.getHeight(), 100.0f * R * 1.7f / wAt100)));
-        }
-        g.setColour (juce::Colours::black.withAlpha (0.6f));
-        g.drawText ("Valved", logoR.translated (2.0f, 3.0f), juce::Justification::centred);
-        g.setColour (cream);
-        g.drawText ("Valved", logoR, juce::Justification::centred);
-    }
-    // Friso (piping) branco em volta da tela
-    g.setColour (juce::Colour (0xffd9d4c4));
-    juce::Path piping;
-    piping.addRoundedRectangle (frameT - 3.0f, frameT - 3.0f, W + 60.0f, H + 60.0f, 12.0f);
-    g.strokePath (piping, juce::PathStrokeType (2.2f));
+    g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+    g.drawImage (cabPhoto, photoRect(), juce::RectanglePlacement::stretchToFit);
 }
 
 void SpeakerView::paint (juce::Graphics& g)
@@ -460,21 +404,31 @@ void SpeakerView::paint (juce::Graphics& g)
 
     // escala real: o falante tem 12" (305 mm); mais longe da tela = mais perto de quem olha
     const float k = speakerRadius() * 2.0f / 305.0f * (1.0f + 0.22f * md);
-    const float shadowOff = 5.0f + 30.0f * md;
-    juce::ignoreUnused (ang);
-    const auto xf = juce::AffineTransform::scale (k).rotated (-0.82f).translated (m);   // corpo sai para cima/direita
+    const float shadowOff = 4.0f + 26.0f * md;
 
-    auto drawMic = [&] (bool shadow)
+    // Fotos dos microfones (vistos por trás, cápsula apontada para o falante).
+    // Âncora = ponto da cápsula na imagem; ppm = pixels por milímetro da imagem.
+    struct Sprite { float ax, ay, ppm; };
+    static const Sprite spr[3][2] = {
+        { { 67.5f, 9.0f, 4.057f },  { 169.1f, 31.2f, 4.650f } },   // SM57
+        { { 148.3f, 10.5f, 2.983f }, { 268.3f, 22.3f, 2.939f } },  // SM7B
+        { { 107.3f, 8.6f, 3.489f },  { 132.7f, 20.1f, 3.512f } } };// MD421
+    const int mi = model == vlv::mics::SM7B ? 1 : (model == vlv::mics::MD421 ? 2 : 0);
+    const int off = ang >= 15.0f ? 1 : 0;                            // inclinado: troca para a foto fora de eixo
+    const auto& sp = spr[mi][off];
+    const auto& img = micImg[mi][off];
+    const float sc = k / sp.ppm;
+    const auto xf = juce::AffineTransform::translation (-sp.ax, -sp.ay).scaled (sc).translated (m);
+    g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+    // sombra na tela do gabinete (luz de cima à esquerda), suave
+    for (int i = 0; i < 4; ++i)
     {
-        juce::Graphics::ScopedSaveState ss (g);
-        g.addTransform (shadow ? xf.translated (shadowOff, shadowOff) : xf);
-        MicPainter mp { g, shadow };
-        if (model == vlv::mics::SM7B) mp.sm7b();
-        else if (model == vlv::mics::MD421) mp.md421();
-        else mp.sm57();
-    };
-    drawMic (true);
-    drawMic (false);
+        const float o = shadowOff * (0.7f + 0.15f * (float) i);
+        g.setColour (juce::Colours::black.withAlpha (0.16f));
+        g.drawImageTransformed (img, xf.translated (o, o), true);
+    }
+    g.setOpacity (1.0f);
+    g.drawImageTransformed (img, xf);
 
     // marca do ponto de captação
     const float fr = (model == vlv::mics::SM7B ? 46.0f : (model == vlv::mics::MD421 ? 23.0f : 16.0f)) * k + 5.0f;
