@@ -236,7 +236,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.39", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.40", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawText ("QUALITY", qualityLabelArea, juce::Justification::centredRight);
 
@@ -258,7 +258,7 @@ void ValvedEditor::resized()
     mainArea = r;
 
     auto row1 = juce::Rectangle<int> (0, 0, getWidth(), 58);
-    logoArea = juce::Rectangle<int> (24, 8, 214, 46);
+    logoArea = juce::Rectangle<int> (30, 17, 128, 28);   // discreto: ~28 px de altura
     auto tabs = row1.withSizeKeepingCentre (440, 58);
     for (auto* t : { &pedalsTab, &ampTab, &cabTab, &fxTab })
         t->setBounds (tabs.removeFromLeft (110));
