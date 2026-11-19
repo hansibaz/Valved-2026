@@ -422,7 +422,8 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     ensemble.setParams (pCe[0]->load() > 0.5f, pCe[1]->load() > 0.5f, pCe[2]->load(), pCe[3]->load(), pCe[4]->load(), pCe[5]->load());
     ensemble.process (m, n);
     // Compressor -> overdrives (Green -> Yellow -> Gold -> Blue), antes do amp
-    compressor.setEnabled (pComp[0]->load() > 0.5f);
+    // Silver Comp guardado: fora da pedalboard por enquanto (o código e os parâmetros continuam)
+    compressor.setEnabled (false);
     compressor.setParams (pComp[1]->load(), pComp[2]->load(), pComp[3]->load(), pComp[4]->load());
     compressor.process (m, n);
     pedals[0].setVariant (pGreenMode->load() > 0.5f ? 1 : 0);

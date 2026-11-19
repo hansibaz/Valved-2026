@@ -31,7 +31,7 @@ namespace ui
     void drawLogo (juce::Graphics& g, juce::Rectangle<float> area);
 
     // Estilos de knob (guardados em slider.getProperties()["knobStyle"])
-    enum KnobStyle { KnobModern = 0, KnobSilver, KnobGoldCap, KnobChrome, KnobBlackChrome, KnobBlackPointer, KnobBrass, KnobCream, KnobRecImage, KnobBlockImage, KnobCleanImage, KnobBritImage };
+    enum KnobStyle { KnobModern = 0, KnobSilver, KnobGoldCap, KnobChrome, KnobBlackChrome, KnobBlackPointer, KnobBrass, KnobCream, KnobRecImage, KnobBlockImage, KnobCleanImage, KnobBritImage, KnobSprite };
 }
 
 class ValvedLook : public juce::LookAndFeel_V4
@@ -53,6 +53,9 @@ public:
     static void drawRecImageKnob (juce::Graphics&, juce::Rectangle<float>, float angle, bool gold = false);
     static void drawBlockImageKnob (juce::Graphics&, juce::Rectangle<float>, float angle);
     static void drawCleanImageKnob (juce::Graphics&, juce::Rectangle<float>, float angle);
+    // knobs dos pedais / efeitos (UI kits): 0 verde grande, 1 verde pequeno, 2 ciano grande, 3 ciano pequeno,
+    // 4 amarelo, 5 creme, 6 prata, 7 grande laranja (delay), 8 grande ciano (reverb)
+    static void drawSpriteKnob (juce::Graphics&, juce::Rectangle<float>, float angle, int sprite);
 };
 
 // Chave de alavanca (toggle) desenhada, com LED

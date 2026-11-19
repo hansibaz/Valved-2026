@@ -2,27 +2,26 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Style.h"
+#include "ImgUI.h"
 #include "PedalsPage.h"
 
 class ValvedProcessor;
 
-// Lista de tipos com LEDs (clique para escolher)
-class TypeSelector : public juce::Component
+// Botão sem desenho (a foto já mostra o botão)
+struct ClearButton : public juce::Button
 {
-public:
-    TypeSelector (juce::RangedAudioParameter* p, juce::StringArray names, juce::Colour led);
-    void paint (juce::Graphics&) override;
-    void mouseDown (const juce::MouseEvent&) override;
-    void setSelected (int i) { if (i != selected) { selected = i; repaint(); } }
-private:
-    juce::RangedAudioParameter* param;
-    juce::StringArray names;
-    juce::Colour ledColour;
-    int selected = 0;
-    juce::Rectangle<float> itemRect (int i) const;
+    ClearButton() : juce::Button ("clear") { setMouseCursor (juce::MouseCursor::PointingHandCursor); }
+    void paintButton (juce::Graphics&, bool, bool) override {}
 };
 
-// Unidade de efeito (delay ou reverb) no estilo dos pedais de estúdio modernos
+// Chave de alavanca do SYNC (foto da chave; desligada = alavanca para o outro lado)
+struct LeverSwitch : public juce::ToggleButton
+{
+    LeverSwitch() { setMouseCursor (juce::MouseCursor::PointingHandCursor); }
+    void paintButton (juce::Graphics&, bool, bool) override;
+};
+
+// Unidade de efeito (delay ou reverb) com a foto do UI kit "POST FX"
 class FxUnit : public juce::Component
 {
 public:
@@ -30,42 +29,45 @@ public:
     FxUnit (ValvedProcessor& p, Kind kind);
     void paint (juce::Graphics&) override;
     void resized() override;
+    void mouseDown (const juce::MouseEvent&) override;
     void refresh();
 
+    float nativeWidth() const;
+    float nativeHeight() const;
+
 private:
-    void renderBody();
+    imgui::Mapper mapper() const;
     void tap();
     juce::String displayLine1() const;
     juce::String displayLine2() const;
+    juce::Rectangle<float> itemRect (int typeIndex) const;   // na foto original
 
     ValvedProcessor& proc;
     Kind kind;
     juce::Colour accentCol;
     std::vector<juce::String> ids;          // ids dos knobs
-    juce::StringArray labels;
     juce::OwnedArray<juce::Slider> knobs;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> knobAtt;
-    std::unique_ptr<TypeSelector> selector;
-    FootSwitch onSwitch, tapSwitch { false };
+    imgui::HitButton onSwitch, tapSwitch { false };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> onAtt;
-    ToggleSwitch syncSwitch { juce::Colour (0xffffb23a) };
+    LeverSwitch syncSwitch;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncAtt;
     juce::ComboBox division;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> divAtt;
 
-    juce::Image body;
-    juce::Rectangle<float> display, panel;
-    juce::String shown1, shown2, specialLabel;
-    bool onState = false, tapLed = false;
+    juce::Image body, listLed, ledOn, ledOff, syncOn, syncOff, tapOn;
+    juce::String shown1, shown2, specialLabel, divText;
+    int selected = -1;
+    bool onState = false, tapLed = false, syncState = false;
     std::vector<double> taps;
     double lastTapMs = 0.0;
 };
 
-// Fader vertical do EQ gráfico (com capa iluminada, como os sliders de EQ dos amps)
+// Fader do EQ gráfico: a capa (foto) corre no trilho da foto
 class EqFader : public juce::Slider
 {
 public:
-    explicit EqFader (juce::Colour c) : led (c)
+    EqFader()
     {
         setSliderStyle (juce::Slider::LinearVertical);
         setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
@@ -73,7 +75,7 @@ public:
         setMouseDragSensitivity (200);
     }
     void paint (juce::Graphics&) override;
-    juce::Colour led;
+    float capW = 20.0f, capH = 11.0f;
 };
 
 // Pedal de EQ gráfico (post FX): VALVED 7 bandas ou MARK 5 bandas
@@ -84,18 +86,19 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     void refresh();
+    float nativeWidth() const { return 793.0f; }
+    float nativeHeight() const { return 1659.0f; }
 private:
-    void renderBody();
+    imgui::Mapper mapper() const;
     ValvedProcessor& proc;
     juce::OwnedArray<EqFader> vFaders, mFaders;
-    EqFader level { juce::Colour (0xffffffff) };
+    EqFader level;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> att;
-    juce::TextButton modeV { "VALVED" }, modeM { "MARK" };
-    FootSwitch onSwitch;
+    ClearButton modeV, modeM;
+    imgui::HitButton onSwitch;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> onAtt;
-    juce::Image body;
-    juce::Rectangle<float> faderArea;
-    int mode = 0;
+    juce::Image body, btnOn, btnOff, ledOff;
+    int mode = -1;
     bool onState = false;
 };
 

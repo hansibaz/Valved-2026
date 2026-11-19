@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Valved VERSION 0.32.0)
+project(Valved VERSION 0.33.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -74,7 +74,48 @@ juce_add_binary_data(ValvedAssets SOURCES
     Resources/BritUI/brit_knob.png
     Resources/BritUI/brit_power_off.png
     Resources/BritUI/brit_standby_off.png
-    Resources/BritUI/brit_led_off.png)
+    Resources/BritUI/brit_led_off.png
+    Resources/FxUI/dly_body.png
+    Resources/FxUI/dly_foot.png
+    Resources/FxUI/dly_led_on_off.png
+    Resources/FxUI/dly_led_on_on.png
+    Resources/FxUI/dly_led_sync_off.png
+    Resources/FxUI/dly_led_sync_on.png
+    Resources/FxUI/dly_led_tap_on.png
+    Resources/FxUI/dly_listled_on.png
+    Resources/FxUI/dly_sync.png
+    Resources/FxUI/eq_body.png
+    Resources/FxUI/eq_btn_off.png
+    Resources/FxUI/eq_btn_on.png
+    Resources/FxUI/eq_cap.png
+    Resources/FxUI/eq_foot.png
+    Resources/FxUI/eq_ledoff.png
+    Resources/FxUI/knob_big.png
+    Resources/FxUI/knob_big_cyan.png
+    Resources/FxUI/knob_cream_np.png
+    Resources/FxUI/knob_cyan_big.png
+    Resources/FxUI/knob_cyan_small.png
+    Resources/FxUI/knob_green_big.png
+    Resources/FxUI/knob_green_small.png
+    Resources/FxUI/knob_silver_np.png
+    Resources/FxUI/knob_yellow.png
+    Resources/FxUI/pedal_blue.png
+    Resources/FxUI/pedal_blue_ledoff.png
+    Resources/FxUI/pedal_chorus.png
+    Resources/FxUI/pedal_chorus_ledoff.png
+    Resources/FxUI/pedal_gold.png
+    Resources/FxUI/pedal_gold_ledoff.png
+    Resources/FxUI/pedal_green.png
+    Resources/FxUI/pedal_green_ledoff.png
+    Resources/FxUI/pedal_yellow.png
+    Resources/FxUI/pedal_yellow_ledoff.png
+    Resources/FxUI/rev_body.png
+    Resources/FxUI/rev_foot.png
+    Resources/FxUI/rev_led_off.png
+    Resources/FxUI/rev_led_on.png
+    Resources/FxUI/rev_listled_on.png
+    Resources/FxUI/slot_chorus.png
+    Resources/FxUI/slot_thumb.png)
 
 target_sources(Valved PRIVATE
     Source/PluginProcessor.cpp

@@ -365,6 +365,49 @@ void ValvedLook::drawCleanImageKnob (juce::Graphics& g, juce::Rectangle<float> r
     g.strokePath (p, juce::PathStrokeType (0.45f * k), rot);
 }
 
+void ValvedLook::drawSpriteKnob (juce::Graphics& g, juce::Rectangle<float> r, float angle, int id)
+{
+    static const juce::Image imgs[9] = {
+        juce::ImageCache::getFromMemory (BinaryData::knob_green_big_png, BinaryData::knob_green_big_pngSize),
+        juce::ImageCache::getFromMemory (BinaryData::knob_green_small_png, BinaryData::knob_green_small_pngSize),
+        juce::ImageCache::getFromMemory (BinaryData::knob_cyan_big_png, BinaryData::knob_cyan_big_pngSize),
+        juce::ImageCache::getFromMemory (BinaryData::knob_cyan_small_png, BinaryData::knob_cyan_small_pngSize),
+        juce::ImageCache::getFromMemory (BinaryData::knob_yellow_png, BinaryData::knob_yellow_pngSize),
+        juce::ImageCache::getFromMemory (BinaryData::knob_cream_np_png, BinaryData::knob_cream_np_pngSize),
+        juce::ImageCache::getFromMemory (BinaryData::knob_silver_np_png, BinaryData::knob_silver_np_pngSize),
+        juce::ImageCache::getFromMemory (BinaryData::knob_big_png, BinaryData::knob_big_pngSize),
+        juce::ImageCache::getFromMemory (BinaryData::knob_big_cyan_png, BinaryData::knob_big_cyan_pngSize) };
+    id = juce::jlimit (0, 8, id);
+    const auto& img = imgs[id];
+    const float d = juce::jmin (r.getWidth(), r.getHeight());
+    const auto c = r.getCentre();
+    const auto sq = juce::Rectangle<float> (d, d).withCentre (c);
+    // sombra no painel (a luz vem de cima)
+    {
+        juce::ColourGradient sh (juce::Colours::black.withAlpha (0.55f), c.x, c.y + d * 0.07f, juce::Colours::transparentBlack, c.x + d * 0.56f, c.y + d * 0.07f, true);
+        g.setGradientFill (sh);
+        g.fillEllipse (sq.translated (0.0f, d * 0.07f).expanded (d * 0.06f));
+    }
+    g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+    const float iw = (float) img.getWidth();
+    if (id == 5 || id == 6)
+    {
+        // creme / prata: vistos um pouco de lado; a foto fica parada e só a marcação gira no topo
+        g.drawImage (img, sq, juce::RectanglePlacement::stretchToFit);
+        const float k = d / 256.0f;
+        const juce::Point<float> cc (sq.getX() + (id == 5 ? 130.0f : 129.0f) * k, sq.getY() + (id == 5 ? 106.0f : 117.0f) * k);
+        const float R = (id == 5 ? 104.0f : 110.0f) * k;
+        const float sx = std::sin (angle), sy = -std::cos (angle) * 0.92f;
+        juce::Path line; line.startNewSubPath (cc.x + sx * R * 0.2f, cc.y + sy * R * 0.2f); line.lineTo (cc.x + sx * R * 0.86f, cc.y + sy * R * 0.86f);
+        g.setColour (juce::Colours::white.withAlpha (0.35f));
+        g.strokePath (line, juce::PathStrokeType (8.0f * k, juce::PathStrokeType::curved, juce::PathStrokeType::rounded), juce::AffineTransform::translation (0.0f, 1.2f * k));
+        g.setColour (id == 5 ? juce::Colour (0xff1b1712) : juce::Colour (0xff1a3f86));
+        g.strokePath (line, juce::PathStrokeType (7.0f * k, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        return;
+    }
+    g.drawImageTransformed (img, juce::AffineTransform::rotation (angle, iw * 0.5f, iw * 0.5f).scaled (d / iw).translated (sq.getX(), sq.getY()));
+}
+
 void ValvedLook::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos,
                                    float startAngle, float endAngle, juce::Slider& s)
 {
@@ -376,6 +419,8 @@ void ValvedLook::drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h
         drawRecImageKnob (g, r, startAngle + pos * (endAngle - startAngle));
     else if (style == KnobBlockImage)
         drawBlockImageKnob (g, r, startAngle + pos * (endAngle - startAngle));
+    else if (style == KnobSprite)
+        drawSpriteKnob (g, r, startAngle + pos * (endAngle - startAngle), (int) s.getProperties().getWithDefault ("sprite", 0));
     else if (style == KnobBritImage)
         drawRecImageKnob (g, r, startAngle + pos * (endAngle - startAngle), true);
     else if (style == KnobCleanImage)

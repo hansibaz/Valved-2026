@@ -3,98 +3,88 @@
 
 using namespace ui;
 
+// Efeitos depois do amp (UI kit "POST FX"): as fotos do EQ, do delay e do reverb ficam como estão,
+// e os controles vão por cima. Coordenadas em px das fotos originais (821 x 1916).
 namespace
 {
     constexpr float knobStart = juce::MathConstants<float>::pi * (7.0f / 6.0f);
     constexpr float knobEnd   = juce::MathConstants<float>::pi * (17.0f / 6.0f);
-    juce::Path rounded (juce::Rectangle<float> r, float radius) { juce::Path p; p.addRoundedRectangle (r, radius); return p; }
 
-    void led (juce::Graphics& g, juce::Point<float> c, float r, juce::Colour col, bool lit)
+    // Delay
+    constexpr float dlyBox[4] = { 9, 205, 803, 1518 };
+    const float dlyKnobX[6] = { 187.5f, 414.5f, 642.0f, 187.5f, 414.5f, 642.0f };
+    const float dlyKnobY[6] = { 845.0f, 845.0f, 845.0f, 1090.0f, 1090.0f, 1090.0f };
+    // Reverb
+    constexpr float revBox[4] = { 12, 177, 801, 1555 };
+    const float revKnobX[6] = { 181.0f, 414.0f, 648.5f, 181.0f, 414.0f, 648.5f };
+    const float revKnobY[6] = { 847.5f, 847.5f, 847.5f, 1112.0f, 1112.0f, 1112.0f };
+
+    void drawText (juce::Graphics& g, const imgui::Mapper& m, const juce::String& t, juce::Font f, float x, float y, float w, float h,
+                   juce::Justification j, juce::Colour c)
     {
-        if (lit)
-        {
-            juce::ColourGradient glow (col.withAlpha (0.55f), c.x, c.y, col.withAlpha (0.0f), c.x + r * 4.5f, c.y, true);
-            g.setGradientFill (glow);
-            g.fillEllipse (c.x - r * 4.5f, c.y - r * 4.5f, r * 9.0f, r * 9.0f);
-        }
-        g.setColour (juce::Colour (0xff0b0b0c));
-        g.fillEllipse (c.x - r - 1.2f, c.y - r - 1.2f, (r + 1.2f) * 2, (r + 1.2f) * 2);
-        juce::ColourGradient lg (lit ? col.brighter (0.8f) : col.darker (0.85f), c.x - r * 0.3f, c.y - r * 0.4f,
-                                 lit ? col.darker (0.2f) : col.darker (0.95f), c.x + r, c.y + r, true);
-        g.setGradientFill (lg);
-        g.fillEllipse (c.x - r, c.y - r, r * 2, r * 2);
+        g.setColour (c);
+        g.setFont (f.withHeight (f.getHeight() * m.sc()));
+        g.drawFittedText (t, m.rect (x, y, w, h).toNearestInt(), j, 1, 0.8f);
     }
 }
 
 //==============================================================================
-TypeSelector::TypeSelector (juce::RangedAudioParameter* p, juce::StringArray n, juce::Colour l)
-    : param (p), names (std::move (n)), ledColour (l)
+void LeverSwitch::paintButton (juce::Graphics& g, bool highlighted, bool)
 {
-    setMouseCursor (juce::MouseCursor::PointingHandCursor);
-}
-
-juce::Rectangle<float> TypeSelector::itemRect (int i) const
-{
-    const int rows = (names.size() + 1) / 2;
-    const float w = (float) getWidth() * 0.5f, h = (float) getHeight() / (float) rows;
-    return { (float) (i / rows) * w, (float) (i % rows) * h, w, h };
-}
-
-void TypeSelector::paint (juce::Graphics& g)
-{
-    for (int i = 0; i < names.size(); ++i)
+    static const juce::Image img = imgui::load (BinaryData::dly_sync_png, BinaryData::dly_sync_pngSize);
+    const auto r = getLocalBounds().toFloat();
+    if (getToggleState()) imgui::draw (g, img, r);
+    else
     {
-        const auto r = itemRect (i);
-        const bool sel = i == selected;
-        led (g, { r.getX() + 9.0f, r.getCentreY() }, 3.2f, ledColour, sel);
-        g.setFont (Fonts::condensedBold (15.0f));
-        g.setColour (sel ? juce::Colours::white : juce::Colour (0xffb9bec8).withAlpha (0.75f));
-        g.drawText (names[i].toUpperCase(), r.withTrimmedLeft (22.0f), juce::Justification::centredLeft);
+        juce::Graphics::ScopedSaveState ss (g);
+        g.addTransform (juce::AffineTransform::scale (1.0f, -1.0f, 0.0f, r.getCentreY()));
+        imgui::draw (g, img, r);
     }
-}
-
-void TypeSelector::mouseDown (const juce::MouseEvent& e)
-{
-    for (int i = 0; i < names.size(); ++i)
-        if (itemRect (i).contains (e.position))
-        {
-            param->beginChangeGesture();
-            param->setValueNotifyingHost (param->convertTo0to1 ((float) i));
-            param->endChangeGesture();
-            setSelected (i);
-            break;
-        }
+    if (highlighted) { g.setColour (juce::Colours::white.withAlpha (0.06f)); g.fillEllipse (r.reduced (r.getWidth() * 0.1f)); }
 }
 
 //==============================================================================
 FxUnit::FxUnit (ValvedProcessor& p, Kind k) : proc (p), kind (k)
 {
     auto& s = p.apvts;
+    using namespace BinaryData;
     accentCol = kind == DelayUnit ? juce::Colour (0xffffb23a) : juce::Colour (0xff53d6ff);
 
     if (kind == DelayUnit)
     {
+        body = imgui::load (dly_body_png, dly_body_pngSize);
+        listLed = imgui::load (dly_listled_on_png, dly_listled_on_pngSize);
+        ledOn = imgui::load (dly_led_on_on_png, dly_led_on_on_pngSize);
+        ledOff = imgui::load (dly_led_on_off_png, dly_led_on_off_pngSize);
+        syncOn = imgui::load (dly_led_sync_on_png, dly_led_sync_on_pngSize);
+        syncOff = imgui::load (dly_led_sync_off_png, dly_led_sync_off_pngSize);
+        tapOn = imgui::load (dly_led_tap_on_png, dly_led_tap_on_pngSize);
+        onSwitch.overlay = tapSwitch.overlay = imgui::load (dly_foot_png, dly_foot_pngSize);
         ids = { ParamID::dlyTime, ParamID::dlyRepeats, ParamID::dlyMix, ParamID::dlyTone, ParamID::dlyMod, ParamID::dlyParam };
-        labels = { "TIME", "REPEATS", "MIX", "TONE", "MOD", "" };
-        selector = std::make_unique<TypeSelector> (s.getParameter (ParamID::dlyType), vlv::StereoDelay::typeNames(), accentCol);
         onAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (s, ParamID::dlyOn, onSwitch);
         addAndMakeVisible (tapSwitch);
+        tapSwitch.setTooltip ("Tap tempo");
         tapSwitch.onClick = [this] { tap(); };
         addAndMakeVisible (syncSwitch);
+        syncSwitch.setTooltip ("Sync the delay time to the host tempo");
         syncAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (s, ParamID::dlySync, syncSwitch);
         division.addItemList (ValvedProcessor::divisionNames(), 1);
+        division.setAlpha (0.0f);   // o texto é desenhado sobre a caixa da foto; o clique abre a lista
         addAndMakeVisible (division);
         divAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (s, ParamID::dlyDiv, division);
     }
     else
     {
+        body = imgui::load (rev_body_png, rev_body_pngSize);
+        listLed = imgui::load (rev_listled_on_png, rev_listled_on_pngSize);
+        ledOn = imgui::load (rev_led_on_png, rev_led_on_pngSize);
+        ledOff = imgui::load (rev_led_off_png, rev_led_off_pngSize);
+        onSwitch.overlay = imgui::load (rev_foot_png, rev_foot_pngSize);
         ids = { ParamID::revDecay, ParamID::revPre, ParamID::revMix, ParamID::revTone, ParamID::revMod, ParamID::revParam };
-        labels = { "DECAY", "PRE-DELAY", "MIX", "TONE", "MOD", "" };
-        selector = std::make_unique<TypeSelector> (s.getParameter (ParamID::revType), vlv::AmbientReverb::typeNames(), accentCol);
         onAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (s, ParamID::revOn, onSwitch);
     }
-    addAndMakeVisible (*selector);
     addAndMakeVisible (onSwitch);
+    onSwitch.setTooltip ("On / Off");
 
     for (auto& id : ids)
     {
@@ -104,7 +94,8 @@ FxUnit::FxUnit (ValvedProcessor& p, Kind k) : proc (p), kind (k)
         kn->setRotaryParameters (knobStart, knobEnd, true);
         kn->setPopupDisplayEnabled (true, true, nullptr);
         kn->setMouseDragSensitivity (220);
-        kn->getProperties().set ("knobStyle", (int) KnobBlackPointer);
+        kn->getProperties().set ("knobStyle", (int) KnobSprite);
+        kn->getProperties().set ("sprite", kind == DelayUnit ? 7 : 8);
         addAndMakeVisible (kn);
         knobAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (s, id, *kn));
         if (auto* prm = s.getParameter (id))
@@ -112,182 +103,119 @@ FxUnit::FxUnit (ValvedProcessor& p, Kind k) : proc (p), kind (k)
     }
 }
 
-void FxUnit::resized()
+float FxUnit::nativeWidth() const  { return kind == DelayUnit ? dlyBox[2] : revBox[2]; }
+float FxUnit::nativeHeight() const { return kind == DelayUnit ? dlyBox[3] : revBox[3]; }
+
+imgui::Mapper FxUnit::mapper() const
 {
-    const auto r = getLocalBounds().toFloat().reduced (4.0f, 6.0f);
-    const float W = r.getWidth();
-    display = { r.getX() + 22.0f, r.getY() + 66.0f, W * 0.44f, 104.0f };
-    selector->setBounds (juce::Rectangle<float> (display.getRight() + 26.0f, display.getY() - 2.0f,
-                                                 r.getRight() - display.getRight() - 46.0f, 108.0f).toNearestInt());
-    panel = { r.getX() + 16.0f, display.getBottom() + 22.0f, W - 32.0f, 128.0f };
-
-    const float step = (panel.getWidth() - 20.0f) / 6.0f;
-    const float kd = juce::jmin (62.0f, step - 6.0f);
-    for (int i = 0; i < knobs.size(); ++i)
-        knobs[i]->setBounds (juce::Rectangle<float> (kd, kd).withCentre ({ panel.getX() + 10.0f + step * ((float) i + 0.5f), panel.getY() + 58.0f }).toNearestInt());
-
-    const float fy = r.getBottom() - 70.0f;
-    const float fsz = 76.0f;
-    if (kind == DelayUnit)
-    {
-        onSwitch.setBounds (juce::Rectangle<float> (fsz, fsz).withCentre ({ r.getX() + W * 0.62f, fy }).toNearestInt());
-        tapSwitch.setBounds (juce::Rectangle<float> (fsz, fsz).withCentre ({ r.getX() + W * 0.85f, fy }).toNearestInt());
-        syncSwitch.setBounds (juce::Rectangle<float> (34.0f, 46.0f).withCentre ({ r.getX() + 52.0f, fy + 6.0f }).toNearestInt());
-        division.setBounds (juce::Rectangle<float> (100.0f, 30.0f).withCentre ({ r.getX() + 148.0f, fy + 10.0f }).toNearestInt());
-    }
-    else
-        onSwitch.setBounds (juce::Rectangle<float> (fsz, fsz).withCentre ({ r.getX() + W * 0.75f, fy }).toNearestInt());
-    body = {};
+    const float* b = kind == DelayUnit ? dlyBox : revBox;
+    return { getLocalBounds().toFloat(), b[0], b[1], b[2], b[3] };
 }
 
-void FxUnit::renderBody()
+juce::Rectangle<float> FxUnit::itemRect (int t) const
 {
-    const float scale = 2.0f;
-    body = juce::Image (juce::Image::ARGB, juce::jmax (1, getWidth() * 2), juce::jmax (1, getHeight() * 2), true);
-    juce::Graphics g (body);
-    g.addTransform (juce::AffineTransform::scale (scale));
-
-    const auto r = getLocalBounds().toFloat().reduced (4.0f, 6.0f);
-    const float R = 18.0f;
-    const auto shape = rounded (r, R);
-    const juce::Colour top = kind == DelayUnit ? juce::Colour (0xff2b3650) : juce::Colour (0xff1d3f45);
-    const juce::Colour bottom = kind == DelayUnit ? juce::Colour (0xff121725) : juce::Colour (0xff0b1c1f);
-
-    juce::DropShadow (juce::Colours::black.withAlpha (0.85f), 28, { 0, 14 }).drawForPath (g, shape);
-    g.setGradientFill (juce::ColourGradient (top, r.getX(), r.getY(), bottom, r.getX() + r.getWidth() * 0.4f, r.getBottom(), false));
-    g.fillPath (shape);
-    {
-        juce::Graphics::ScopedSaveState ss (g);
-        g.reduceClipRegion (shape);
-        juce::Random rng (kind == DelayUnit ? 7 : 9);
-        for (float y = r.getY(); y < r.getBottom(); y += 0.75f)
-        {
-            g.setColour (juce::Colours::white.withAlpha (0.035f * rng.nextFloat()));
-            g.fillRect (r.getX(), y, r.getWidth(), 0.5f);
-        }
-        juce::ColourGradient sheen (juce::Colours::white.withAlpha (0.14f), r.getX(), r.getY(), juce::Colours::transparentWhite, r.getX() + r.getWidth() * 0.5f, r.getY() + r.getHeight() * 0.45f, false);
-        g.setGradientFill (sheen);
-        g.fillRect (r);
-    }
-    g.setColour (juce::Colours::white.withAlpha (0.2f));
-    g.strokePath (rounded (r.reduced (1.0f), R), juce::PathStrokeType (1.2f));
-
-    // Cabeçalho
-    g.setColour (accentCol);
-    g.setFont (Fonts::condensedBold (13.0f));
-    g.drawText ("V A L V E D", juce::Rectangle<float> (r.getX() + 24.0f, r.getY() + 14.0f, 200.0f, 16.0f), juce::Justification::centredLeft);
-    g.setColour (juce::Colours::white);
-    g.setFont (Fonts::wide (24.0f));
-    g.drawText (kind == DelayUnit ? "DELAY" : "REVERB", juce::Rectangle<float> (r.getX() + 22.0f, r.getY() + 28.0f, 260.0f, 30.0f), juce::Justification::centredLeft);
-    g.setColour (juce::Colours::white.withAlpha (0.5f));
-    g.setFont (Fonts::condensed (14.0f));
-    g.drawText (kind == DelayUnit ? "STEREO MULTI-MODE DELAY" : "AMBIENT MULTI-REVERB",
-                juce::Rectangle<float> (r.getRight() - 260.0f, r.getY() + 30.0f, 236.0f, 24.0f), juce::Justification::centredRight);
-
-    // Moldura do display
-    const auto dp = rounded (display.expanded (5.0f), 9.0f);
-    g.setColour (juce::Colour (0xff0a0b0e));
-    g.fillPath (dp);
-    g.setColour (juce::Colours::white.withAlpha (0.12f));
-    g.strokePath (dp, juce::PathStrokeType (1.0f));
-
-    // Rebaixo do seletor
-    auto selArea = selector->getBounds().toFloat().expanded (8.0f, 6.0f);
-    g.setColour (juce::Colours::black.withAlpha (0.28f));
-    g.fillRoundedRectangle (selArea, 8.0f);
-
-    // Painel dos knobs
-    const auto pp = rounded (panel, 12.0f);
-    g.setColour (juce::Colours::black.withAlpha (0.25f));
-    g.fillPath (pp);
-    g.setColour (juce::Colours::white.withAlpha (0.06f));
-    g.strokePath (pp, juce::PathStrokeType (1.0f));
-    for (auto* kn : knobs)
-    {
-        const auto kr = kn->getBounds().toFloat();
-        const auto c = kr.getCentre();
-        const float kR = kr.getWidth() * 0.5f;
-        for (int t = 0; t <= 10; ++t)
-        {
-            const float a = knobStart + (knobEnd - knobStart) * (float) t / 10.0f;
-            g.setColour (juce::Colours::white.withAlpha (t % 5 == 0 ? 0.6f : 0.25f));
-            g.drawLine (c.x + std::sin (a) * kR * 1.08f, c.y - std::cos (a) * kR * 1.08f,
-                        c.x + std::sin (a) * kR * (t % 5 == 0 ? 1.2f : 1.15f), c.y - std::cos (a) * kR * (t % 5 == 0 ? 1.2f : 1.15f), 1.0f);
-        }
-    }
-
-    // Rótulos dos footswitches
-    g.setColour (juce::Colours::white.withAlpha (0.75f));
-    g.setFont (Fonts::condensedBold (14.0f));
-    auto under = [&g] (juce::Component& c, const char* t)
-    {
-        g.drawText (t, juce::Rectangle<float> (120.0f, 16.0f).withCentre ({ (float) c.getBounds().getCentreX(), (float) c.getBottom() + 10.0f }), juce::Justification::centred);
-    };
-    under (onSwitch, "ON / OFF");
     if (kind == DelayUnit)
     {
-        under (tapSwitch, "TAP");
-        g.drawText ("SYNC", juce::Rectangle<float> (60.0f, 16.0f).withCentre ({ (float) syncSwitch.getBounds().getCentreX(), (float) syncSwitch.getBottom() + 10.0f }), juce::Justification::centred);
-        g.drawText ("DIVISION", juce::Rectangle<float> (100.0f, 16.0f).withCentre ({ (float) division.getBounds().getCentreX(), (float) division.getY() - 12.0f }), juce::Justification::centred);
+        // DIGITAL, TAPE, ANALOG, DUAL, PING-PONG | MULTI-TAP, REVERSE, SWELL, DUCKING, LO-FI
+        const int col = t / 5, row = t % 5;
+        return { (col == 0 ? 470.0f : 627.0f) - 16.0f, 478.0f + 44.0f * (float) row - 22.0f, col == 0 ? 152.0f : 168.0f, 44.0f };
+    }
+    // ROOM, HALL, PLATE, SPRING, SHIMMER | SHIMMER 5TH (embaixo de GATED), BLOOM, CLOUD, SWELL, GATED
+    int col = 0, row = t;
+    if (t == 5) { col = 1; row = 4; }
+    else if (t > 5) { col = 1; row = t - 6; }
+    return { (col == 0 ? 500.0f : 663.0f) - 16.0f, 442.0f + 48.75f * (float) row - 24.0f, col == 0 ? 160.0f : 150.0f, 48.0f };
+}
+
+void FxUnit::resized()
+{
+    const auto m = mapper();
+    const float kb = kind == DelayUnit ? 130.0f : 140.0f;
+    for (int i = 0; i < knobs.size(); ++i)
+        knobs[i]->setBounds (m.box (kind == DelayUnit ? dlyKnobX[i] : revKnobX[i], kind == DelayUnit ? dlyKnobY[i] : revKnobY[i], kb, kb).toNearestInt());
+    if (kind == DelayUnit)
+    {
+        onSwitch.setBounds (m.box (498.0f, 1462.0f, 160.0f, 160.0f).toNearestInt());
+        tapSwitch.setBounds (m.box (682.0f, 1462.0f, 160.0f, 160.0f).toNearestInt());
+        syncSwitch.setBounds (m.rect (73.0f, 1440.0f, 67.0f, 70.0f).toNearestInt());
+        division.setBounds (m.rect (195.0f, 1440.0f, 183.0f, 65.0f).toNearestInt());
     }
     else
-    {
-        g.setColour (juce::Colours::white.withAlpha (0.4f));
-        g.setFont (Fonts::condensed (13.0f));
-        g.drawText ("Trails: the tail keeps ringing when you switch off",
-                    juce::Rectangle<float> (r.getX() + 24.0f, (float) onSwitch.getBounds().getCentreY() - 10.0f, r.getWidth() * 0.5f, 20.0f),
-                    juce::Justification::centredLeft);
-    }
+        onSwitch.setBounds (m.box (566.0f, 1490.0f, 192.0f, 192.0f).toNearestInt());
+}
 
-    // Parafusos
-    for (auto pt : { r.getTopLeft().translated (11, 11), r.getTopRight().translated (-11, 11),
-                     r.getBottomLeft().translated (11, -11), r.getBottomRight().translated (-11, -11) })
+void FxUnit::mouseDown (const juce::MouseEvent& e)
+{
+    const auto m = mapper();
+    const int n = kind == DelayUnit ? vlv::StereoDelay::typeNames().size() : vlv::AmbientReverb::typeNames().size();
+    for (int i = 0; i < n; ++i)
     {
-        g.setGradientFill (juce::ColourGradient (juce::Colour (0xffe0e2e6), pt.x - 3, pt.y - 3, juce::Colour (0xff45484e), pt.x + 3, pt.y + 3, false));
-        g.fillEllipse (pt.x - 3.5f, pt.y - 3.5f, 7.0f, 7.0f);
+        const auto r = itemRect (i);
+        if (m.rect (r.getX(), r.getY(), r.getWidth(), r.getHeight()).contains (e.position))
+        {
+            if (auto* prm = proc.apvts.getParameter (kind == DelayUnit ? ParamID::dlyType : ParamID::revType))
+            {
+                prm->beginChangeGesture();
+                prm->setValueNotifyingHost (prm->convertTo0to1 ((float) i));
+                prm->endChangeGesture();
+            }
+            refresh();
+            return;
+        }
     }
 }
 
 void FxUnit::paint (juce::Graphics& g)
 {
-    if (body.isNull() || body.getWidth() != getWidth() * 2) renderBody();
-    g.drawImage (body, getLocalBounds().toFloat());
-
-    // Display
+    const auto m = mapper();
     {
-        juce::ColourGradient glass (juce::Colour (0xff10141a), display.getX(), display.getY(), juce::Colour (0xff05070a), display.getX(), display.getBottom(), false);
-        g.setGradientFill (glass);
-        g.fillRoundedRectangle (display, 6.0f);
-        const auto ink = onState ? accentCol : accentCol.withAlpha (0.35f);
-        g.setColour (ink.withAlpha (onState ? 0.08f : 0.03f));
-        g.fillRoundedRectangle (display, 6.0f);
-        g.setColour (ink);
-        g.setFont (Fonts::wide (20.0f));
-        g.drawFittedText (shown1, display.reduced (14.0f, 0).withTrimmedTop (16.0f).withHeight (32.0f).toNearestInt(), juce::Justification::centredLeft, 1);
-        g.setFont (Fonts::condensedMedium (16.0f));
-        g.setColour (ink.withAlpha (onState ? 0.85f : 0.3f));
-        g.drawFittedText (shown2, display.reduced (14.0f, 0).withTrimmedTop (56.0f).withHeight (22.0f).toNearestInt(), juce::Justification::centredLeft, 1);
-        g.setFont (Fonts::condensed (12.0f));
-        g.drawText (onState ? "ON" : "BYPASS", display.reduced (12.0f, 8.0f), juce::Justification::topRight);
-        juce::ColourGradient glare (juce::Colours::white.withAlpha (0.06f), display.getX(), display.getY(), juce::Colours::transparentWhite, display.getX(), display.getY() + display.getHeight() * 0.5f, false);
-        g.setGradientFill (glare);
-        g.fillRoundedRectangle (display, 6.0f);
+        const auto r = getLocalBounds().toFloat().reduced ((float) getWidth() * 0.03f, (float) getHeight() * 0.02f);
+        juce::Path p; p.addRoundedRectangle (r, r.getWidth() * 0.06f);
+        juce::DropShadow (juce::Colours::black.withAlpha (0.8f), 24, { 0, 12 }).drawForPath (g, p);
     }
+    imgui::draw (g, body, getLocalBounds().toFloat());
 
-    // Nomes dos knobs (o último muda conforme o tipo)
-    g.setFont (Fonts::condensedBold (14.0f));
-    for (int i = 0; i < knobs.size(); ++i)
-    {
-        const auto kr = knobs[i]->getBounds().toFloat();
-        const juce::String t = i == knobs.size() - 1 ? specialLabel : labels[i];
-        g.setColour (i == knobs.size() - 1 ? accentCol : juce::Colours::white.withAlpha (0.85f));
-        g.drawText (t, juce::Rectangle<float> (110.0f, 18.0f).withCentre ({ kr.getCentreX(), kr.getBottom() + 18.0f }), juce::Justification::centred);
-    }
-
-    // LEDs dos footswitches
-    led (g, { (float) onSwitch.getBounds().getCentreX(), (float) onSwitch.getY() - 14.0f }, 4.5f, accentCol, onState);
+    const auto ink = onState ? accentCol : accentCol.withAlpha (0.4f);
     if (kind == DelayUnit)
-        led (g, { (float) tapSwitch.getBounds().getCentreX(), (float) tapSwitch.getY() - 14.0f }, 4.5f, juce::Colour (0xffff3a2a), tapLed);
+    {
+        // display
+        drawText (g, m, shown1, Fonts::wide (34.0f), 97.0f, 500.0f, 300.0f, 42.0f, juce::Justification::centredLeft, ink);
+        drawText (g, m, shown2, Fonts::condensedMedium (27.0f), 104.0f, 634.0f, 300.0f, 34.0f, juce::Justification::centredLeft, ink.withAlpha (onState ? 0.9f : 0.35f));
+        if (! onState) drawText (g, m, "BYPASS", Fonts::condensedMedium (24.0f), 318.0f, 478.0f, 76.0f, 26.0f, juce::Justification::centredRight, accentCol.withAlpha (0.8f));
+        // divisão (sobre a caixa da foto)
+        drawText (g, m, divText, Fonts::condensedMedium (28.0f), 214.0f, 1450.0f, 110.0f, 46.0f, juce::Justification::centredLeft,
+                  juce::Colour (0xffffd27a).withAlpha (syncState ? 0.95f : 0.35f));
+        // LEDs
+        imgui::draw (g, onState ? ledOn : ledOff, m.box (498.0f, 1357.0f, 44.0f, 44.0f));
+        imgui::draw (g, syncState ? syncOn : syncOff, m.box (105.0f, 1400.0f, 44.0f, 44.0f));
+        if (tapLed) imgui::draw (g, tapOn, m.box (682.0f, 1357.0f, 44.0f, 44.0f));
+    }
+    else
+    {
+        drawText (g, m, shown1, Fonts::wide (36.0f), 98.0f, 450.0f, 236.0f, 44.0f, juce::Justification::centredLeft, ink);
+        drawText (g, m, shown2, Fonts::condensedMedium (25.0f), 88.0f, 606.0f, 336.0f, 34.0f, juce::Justification::centredLeft, ink.withAlpha (onState ? 0.9f : 0.35f));
+        drawText (g, m, onState ? "ON" : "BYPASS", Fonts::condensedBold (22.0f), 340.0f, 435.0f, 78.0f, 33.0f, juce::Justification::centred,
+                  onState ? accentCol.withAlpha (0.9f) : juce::Colours::white.withAlpha (0.6f));
+        // o SHIMMER 5TH não está na foto: entra embaixo de GATED, no mesmo estilo
+        const auto r = itemRect (5);
+        const auto c = m.pt (663.0f, r.getCentreY());
+        const float lr = 7.5f * m.sc();
+        g.setColour (juce::Colour (0xff0d1416)); g.fillEllipse (c.x - lr * 1.35f, c.y - lr * 1.35f, lr * 2.7f, lr * 2.7f);
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff3e5258), c.x - lr * 0.4f, c.y - lr * 0.5f, juce::Colour (0xff10191b), c.x + lr, c.y + lr, true));
+        g.fillEllipse (c.x - lr, c.y - lr, lr * 2.0f, lr * 2.0f);
+        drawText (g, m, "SHIMMER 5TH", Fonts::condensedBold (25.0f), 688.0f, r.getY() + 8.0f, 112.0f, 32.0f, juce::Justification::centredLeft,
+                  juce::Colour (0xffc5ced3).withAlpha (selected == 5 ? 1.0f : 0.8f));
+        imgui::draw (g, onState ? ledOn : ledOff, m.box (575.0f, 1367.0f, 44.0f, 44.0f));
+    }
+    // LED do tipo escolhido
+    if (selected >= 0)
+    {
+        const auto r = itemRect (selected);
+        imgui::draw (g, listLed, m.box (r.getX() + 16.0f, r.getCentreY(), kind == DelayUnit ? 32.0f : 34.0f, kind == DelayUnit ? 32.0f : 34.0f));
+    }
+    // rótulo do 6º knob (muda conforme o tipo)
+    drawText (g, m, specialLabel, Fonts::condensedBold (29.0f), kind == DelayUnit ? 574.0f : 578.0f, kind == DelayUnit ? 1196.0f : 1208.0f,
+              140.0f, 32.0f, juce::Justification::centred, accentCol);
 }
 
 juce::String FxUnit::displayLine1() const
@@ -305,9 +233,8 @@ juce::String FxUnit::displayLine2() const
         const float ms = proc.getEffectiveDelayMs();
         const juce::String mix = "MIX " + juce::String ((int) s.getRawParameterValue (ParamID::dlyMix)->load()) + "%";
         if (s.getRawParameterValue (ParamID::dlySync)->load() > 0.5f)
-            return ValvedProcessor::divisionNames()[(int) s.getRawParameterValue (ParamID::dlyDiv)->load()] + "  @ "
-                   + juce::String (proc.getBpm(), 0) + " BPM  =  " + juce::String (ms, 0) + " ms   " + mix;
-        return juce::String (ms, 0) + " ms   " + mix;
+            return juce::String (ms, 0) + " ms @ " + juce::String (proc.getBpm(), 0) + "   " + mix;
+        return juce::String (ms, 0) + " ms     " + mix;
     }
     const int t = (int) s.getRawParameterValue (ParamID::revType)->load();
     const float secs = vlv::AmbientReverb::decaySeconds (t, s.getRawParameterValue (ParamID::revDecay)->load());
@@ -319,26 +246,26 @@ void FxUnit::refresh()
 {
     auto& s = proc.apvts;
     const int type = (int) s.getRawParameterValue (kind == DelayUnit ? ParamID::dlyType : ParamID::revType)->load();
-    selector->setSelected (type);
     const bool on = s.getRawParameterValue (kind == DelayUnit ? ParamID::dlyOn : ParamID::revOn)->load() > 0.5f;
     const juce::String l1 = displayLine1(), l2 = displayLine2();
-    const juce::String sp = kind == DelayUnit ? vlv::StereoDelay::paramName (type) : vlv::AmbientReverb::paramName (type);
+    const juce::String sp = juce::String (kind == DelayUnit ? vlv::StereoDelay::paramName (type) : vlv::AmbientReverb::paramName (type)).toUpperCase();
 
-    bool tl = false;
+    bool tl = false, sync = false;
+    juce::String dv;
     if (kind == DelayUnit)
     {
-        const bool sync = s.getRawParameterValue (ParamID::dlySync)->load() > 0.5f;
+        sync = s.getRawParameterValue (ParamID::dlySync)->load() > 0.5f;
         knobs[0]->setEnabled (! sync);
-        knobs[0]->setAlpha (sync ? 0.4f : 1.0f);
+        knobs[0]->setAlpha (sync ? 0.5f : 1.0f);
         division.setEnabled (sync);
-        division.setAlpha (sync ? 1.0f : 0.45f);
+        dv = ValvedProcessor::divisionNames()[(int) s.getRawParameterValue (ParamID::dlyDiv)->load()];
         const double period = juce::jmax (40.0, (double) proc.getEffectiveDelayMs());
         tl = on && std::fmod (juce::Time::getMillisecondCounterHiRes(), period) < juce::jmin (90.0, period * 0.4);
     }
 
-    if (l1 != shown1 || l2 != shown2 || sp != specialLabel || on != onState || tl != tapLed)
+    if (l1 != shown1 || l2 != shown2 || sp != specialLabel || on != onState || tl != tapLed || type != selected || sync != syncState || dv != divText)
     {
-        shown1 = l1; shown2 = l2; specialLabel = sp; onState = on; tapLed = tl;
+        shown1 = l1; shown2 = l2; specialLabel = sp; onState = on; tapLed = tl; selected = type; syncState = sync; divText = dv;
         repaint();
     }
 }
@@ -366,33 +293,32 @@ void FxUnit::tap()
 //==============================================================================
 void EqFader::paint (juce::Graphics& g)
 {
+    static const juce::Image cap = imgui::load (BinaryData::eq_cap_png, BinaryData::eq_cap_pngSize);
     const auto b = getLocalBounds().toFloat();
-    const float yTop = (float) getPositionOfValue (getMaximum()), yBot = (float) getPositionOfValue (getMinimum());
     const float y0 = (float) getPositionOfValue (0.0), yv = (float) getPositionOfValue (getValue());
     const float cx = b.getCentreX();
-    // trilho
-    g.setColour (juce::Colours::black.withAlpha (0.75f));
-    g.fillRoundedRectangle (cx - 2.5f, yTop - 2.0f, 5.0f, yBot - yTop + 4.0f, 2.5f);
-    // barra iluminada do 0 até o valor
-    g.setColour (led.withAlpha (isEnabled() ? 0.85f : 0.3f));
-    g.fillRect (cx - 1.0f, juce::jmin (y0, yv), 2.0f, std::abs (yv - y0));
-    // capa do fader
-    auto cap = juce::Rectangle<float> (juce::jmin (b.getWidth() - 2.0f, 26.0f), 14.0f).withCentre ({ cx, yv });
-    g.setColour (juce::Colours::black.withAlpha (0.5f));
-    g.fillRoundedRectangle (cap.translated (0.0f, 2.0f), 3.0f);
-    g.setGradientFill (juce::ColourGradient (juce::Colour (0xffe9ebef), cap.getX(), cap.getY(), juce::Colour (0xff6c7078), cap.getX(), cap.getBottom(), false));
-    g.fillRoundedRectangle (cap, 3.0f);
-    g.setColour (led.withAlpha (isEnabled() ? 1.0f : 0.4f));
-    g.fillRect (cap.getX() + 3.0f, cap.getCentreY() - 1.0f, cap.getWidth() - 6.0f, 2.0f);
+    // filete aceso do 0 até o valor (como na foto do UI kit)
+    g.setColour (juce::Colour (0xff6fe3e0).withAlpha (isEnabled() ? 0.8f : 0.3f));
+    g.fillRect (cx - capW * 0.035f, juce::jmin (y0, yv), capW * 0.07f, std::abs (yv - y0));
+    auto r = juce::Rectangle<float> (capW, capH).withCentre ({ cx, yv });
+    g.setColour (juce::Colours::black.withAlpha (0.45f));
+    g.fillRoundedRectangle (r.translated (0.0f, capH * 0.18f).expanded (capW * 0.04f), capH * 0.35f);
+    imgui::draw (g, cap, r);
 }
 
 EqUnit::EqUnit (ValvedProcessor& p) : proc (p)
 {
+    using namespace BinaryData;
+    body = imgui::load (eq_body_png, eq_body_pngSize);
+    btnOn = imgui::load (eq_btn_on_png, eq_btn_on_pngSize);
+    btnOff = imgui::load (eq_btn_off_png, eq_btn_off_pngSize);
+    ledOff = imgui::load (eq_ledoff_png, eq_ledoff_pngSize);
+    onSwitch.overlay = imgui::load (eq_foot_png, eq_foot_pngSize);
+
     auto& s = p.apvts;
-    const juce::Colour led (0xff7dff9a);
     auto add = [&] (juce::OwnedArray<EqFader>& arr, const juce::String& id)
     {
-        auto* f = arr.add (new EqFader (led));
+        auto* f = arr.add (new EqFader());
         addChildComponent (f);
         att.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (s, id, *f));
         f->setDoubleClickReturnValue (true, 0.0);
@@ -403,13 +329,8 @@ EqUnit::EqUnit (ValvedProcessor& p) : proc (p)
     att.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (s, ParamID::eqLevel, level));
     level.setDoubleClickReturnValue (true, 0.0);
 
-    for (auto* b : { &modeV, &modeM })
-    {
-        addAndMakeVisible (b);
-        b->setClickingTogglesState (false);
-    }
-    modeV.setConnectedEdges (juce::Button::ConnectedOnRight);
-    modeM.setConnectedEdges (juce::Button::ConnectedOnLeft);
+    addAndMakeVisible (modeV);
+    addAndMakeVisible (modeM);
     modeV.setTooltip ("Valved 7-band: frequencies chosen for guitar");
     modeM.setTooltip ("Mark 5-band: the classic 80 / 240 / 750 / 2200 / 6600 Hz graphic EQ");
     auto setMode = [this] (int m)
@@ -424,22 +345,22 @@ EqUnit::EqUnit (ValvedProcessor& p) : proc (p)
     modeM.onClick = [setMode] { setMode (1); };
 
     addAndMakeVisible (onSwitch);
+    onSwitch.setTooltip ("On / Off");
     onAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (s, ParamID::eqOn, onSwitch);
     refresh();
 }
+
+imgui::Mapper EqUnit::mapper() const { return { getLocalBounds().toFloat(), 14.0f, 128.0f, 793.0f, 1659.0f }; }
 
 void EqUnit::refresh()
 {
     const int m = (int) proc.apvts.getRawParameterValue (ParamID::eqMode)->load();
     const bool on = proc.apvts.getRawParameterValue (ParamID::eqOn)->load() > 0.5f;
-    if (m != mode || ! modeV.getToggleState() == ! modeM.getToggleState())
+    if (m != mode)
     {
         mode = m;
         for (auto* f : vFaders) f->setVisible (mode == 0);
         for (auto* f : mFaders) f->setVisible (mode == 1);
-        modeV.setToggleState (mode == 0, juce::dontSendNotification);
-        modeM.setToggleState (mode == 1, juce::dontSendNotification);
-        resized();
         repaint();
     }
     if (on != onState) { onState = on; repaint(); }
@@ -447,125 +368,58 @@ void EqUnit::refresh()
 
 void EqUnit::resized()
 {
-    const auto r = getLocalBounds().toFloat().reduced (4.0f, 6.0f);
-    const float W = r.getWidth();
-    auto mb = juce::Rectangle<float> (r.getX() + 18.0f, r.getY() + 70.0f, W - 36.0f, 28.0f);
-    modeV.setBounds (mb.removeFromLeft (mb.getWidth() * 0.5f).toNearestInt());
-    modeM.setBounds (mb.toNearestInt());
-    faderArea = { r.getX() + 14.0f, r.getY() + 112.0f, W - 28.0f, 240.0f };
-    auto fa = faderArea.reduced (6.0f, 24.0f);
-    fa.removeFromLeft (20.0f);   // espaço da escala em dB
-    const float levelW = 34.0f;
-    auto lv = fa.removeFromRight (levelW);
-    fa.removeFromRight (8.0f);
-    auto place = [&] (juce::OwnedArray<EqFader>& arr)
+    const auto m = mapper();
+    modeV.setBounds (m.rect (90.0f, 415.0f, 320.0f, 85.0f).toNearestInt());
+    modeM.setBounds (m.rect (432.0f, 415.0f, 318.0f, 85.0f).toNearestInt());
+    // trilhos da foto: +12 dB em y 678, -12 dB em y 1127
+    static const float trackX[8] = { 172.0f, 240.0f, 310.0f, 380.0f, 450.0f, 520.0f, 590.0f, 695.0f };
+    const float sc = m.sc();
+    const float w = 64.0f * sc;
+    const float pad = juce::jmin (12.0f, w * 0.5f);   // margem interna do slider vertical (raio da "bolinha" do LookAndFeel)
+    auto place = [&] (EqFader& f, float x)
     {
-        const float w = fa.getWidth() / (float) arr.size();
-        for (int i = 0; i < arr.size(); ++i)
-            arr[i]->setBounds (juce::Rectangle<float> (fa.getX() + w * (float) i, fa.getY(), w, fa.getHeight()).toNearestInt());
+        const auto top = m.pt (x, 678.0f), bot = m.pt (x, 1127.0f);
+        f.setBounds (juce::Rectangle<float> (top.x - w * 0.5f, top.y - pad, w, bot.y - top.y + 2.0f * pad).toNearestInt());
+        f.capW = 58.0f * sc; f.capH = 33.0f * sc;
     };
-    place (vFaders); place (mFaders);
-    level.setBounds (lv.toNearestInt());
-    const float fsz = 76.0f;
-    onSwitch.setBounds (juce::Rectangle<float> (fsz, fsz).withCentre ({ r.getCentreX(), r.getBottom() - 70.0f }).toNearestInt());
-    body = {};
-}
-
-void EqUnit::renderBody()
-{
-    body = juce::Image (juce::Image::ARGB, juce::jmax (1, getWidth() * 2), juce::jmax (1, getHeight() * 2), true);
-    juce::Graphics g (body);
-    g.addTransform (juce::AffineTransform::scale (2.0f));
-    const auto r = getLocalBounds().toFloat().reduced (4.0f, 6.0f);
-    const float R = 18.0f;
-    const auto shape = rounded (r, R);
-    juce::DropShadow (juce::Colours::black.withAlpha (0.85f), 28, { 0, 14 }).drawForPath (g, shape);
-    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff3a3d42), r.getX(), r.getY(), juce::Colour (0xff15171a), r.getX() + r.getWidth() * 0.4f, r.getBottom(), false));
-    g.fillPath (shape);
-    {
-        juce::Graphics::ScopedSaveState ss (g);
-        g.reduceClipRegion (shape);
-        juce::Random rng (11);
-        for (float y = r.getY(); y < r.getBottom(); y += 0.75f)
-        {
-            g.setColour (juce::Colours::white.withAlpha (0.035f * rng.nextFloat()));
-            g.fillRect (r.getX(), y, r.getWidth(), 0.5f);
-        }
-        g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.14f), r.getX(), r.getY(), juce::Colours::transparentWhite, r.getX() + r.getWidth() * 0.5f, r.getY() + r.getHeight() * 0.45f, false));
-        g.fillRect (r);
-    }
-    g.setColour (juce::Colours::white.withAlpha (0.2f));
-    g.strokePath (rounded (r.reduced (1.0f), R), juce::PathStrokeType (1.2f));
-
-    g.setColour (juce::Colour (0xff7dff9a));
-    g.setFont (Fonts::condensedBold (13.0f));
-    g.drawText ("V A L V E D", juce::Rectangle<float> (r.getX() + 24.0f, r.getY() + 14.0f, 200.0f, 16.0f), juce::Justification::centredLeft);
-    g.setColour (juce::Colours::white);
-    g.setFont (Fonts::wide (24.0f));
-    g.drawText ("EQ", juce::Rectangle<float> (r.getX() + 22.0f, r.getY() + 28.0f, 100.0f, 30.0f), juce::Justification::centredLeft);
-    g.setColour (juce::Colours::white.withAlpha (0.5f));
-    g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("GRAPHIC EQ", juce::Rectangle<float> (r.getRight() - 140.0f, r.getY() + 30.0f, 116.0f, 24.0f), juce::Justification::centredRight);
-
-    // painel dos faders com escala
-    const auto pp = rounded (faderArea, 12.0f);
-    g.setColour (juce::Colours::black.withAlpha (0.28f));
-    g.fillPath (pp);
-    g.setColour (juce::Colours::white.withAlpha (0.06f));
-    g.strokePath (pp, juce::PathStrokeType (1.0f));
-    auto& arr = mode == 1 ? mFaders : vFaders;
-    if (arr.size() > 0)
-    {
-        auto* f0 = arr[0];
-        const float yTop = (float) f0->getY() + (float) f0->getPositionOfValue (12.0);
-        const float yMid = (float) f0->getY() + (float) f0->getPositionOfValue (0.0);
-        const float yBot = (float) f0->getY() + (float) f0->getPositionOfValue (-12.0);
-        g.setFont (Fonts::condensed (11.0f));
-        for (auto [y, t] : { std::pair<float, const char*> { yTop, "+12" }, { yMid, "0" }, { yBot, "-12" } })
-        {
-            g.setColour (juce::Colours::white.withAlpha (t[0] == '0' ? 0.22f : 0.12f));
-            g.fillRect (faderArea.getX() + 26.0f, y - 0.5f, faderArea.getWidth() - 32.0f, 1.0f);
-            g.setColour (juce::Colours::white.withAlpha (0.45f));
-            g.drawText (t, juce::Rectangle<float> (faderArea.getX() + 2.0f, y - 7.0f, 22.0f, 14.0f), juce::Justification::centredRight);
-        }
-        // rótulos de frequência
-        const char* vl[7] = { "80", "200", "400", "800", "1k6", "3k2", "6k4" };
-        const char* ml[5] = { "80", "240", "750", "2200", "6600" };
-        g.setColour (juce::Colours::white.withAlpha (0.75f));
-        g.setFont (Fonts::condensedBold (mode == 1 ? 12.0f : 11.0f));
-        for (int i = 0; i < arr.size(); ++i)
-        {
-            const auto fb = arr[i]->getBounds().toFloat();
-            g.drawText (mode == 1 ? ml[i] : vl[i], juce::Rectangle<float> (fb.getX() - 2.0f, faderArea.getBottom() - 20.0f, fb.getWidth() + 4.0f, 16.0f), juce::Justification::centred);
-        }
-        const auto lb = level.getBounds().toFloat();
-        g.setColour (juce::Colours::white.withAlpha (0.9f));
-        g.drawText ("LEVEL", juce::Rectangle<float> (lb.getX() - 10.0f, faderArea.getBottom() - 20.0f, lb.getWidth() + 20.0f, 16.0f), juce::Justification::centred);
-        g.setColour (juce::Colours::white.withAlpha (0.5f));
-        g.setFont (Fonts::condensed (11.0f));
-        g.drawText ("dB", juce::Rectangle<float> (faderArea.getX() + 2.0f, faderArea.getY() + 4.0f, 22.0f, 14.0f), juce::Justification::centredRight);
-    }
-    g.setColour (juce::Colours::white.withAlpha (0.75f));
-    g.setFont (Fonts::condensedBold (14.0f));
-    g.drawText ("ON / OFF", juce::Rectangle<float> (120.0f, 16.0f).withCentre ({ (float) onSwitch.getBounds().getCentreX(), (float) onSwitch.getBottom() + 10.0f }), juce::Justification::centred);
-    for (auto pt : { r.getTopLeft().translated (11, 11), r.getTopRight().translated (-11, 11),
-                     r.getBottomLeft().translated (11, -11), r.getBottomRight().translated (-11, -11) })
-    {
-        g.setGradientFill (juce::ColourGradient (juce::Colour (0xffe0e2e6), pt.x - 3, pt.y - 3, juce::Colour (0xff45484e), pt.x + 3, pt.y + 3, false));
-        g.fillEllipse (pt.x - 3.5f, pt.y - 3.5f, 7.0f, 7.0f);
-    }
+    for (int i = 0; i < vFaders.size(); ++i) place (*vFaders[i], trackX[i]);
+    for (int i = 0; i < mFaders.size(); ++i) place (*mFaders[i], trackX[i]);
+    place (level, trackX[7]);
+    onSwitch.setBounds (m.box (410.0f, 1492.0f, 256.0f, 256.0f).toNearestInt());
 }
 
 void EqUnit::paint (juce::Graphics& g)
 {
-    if (body.isNull() || body.getWidth() != getWidth() * 2) renderBody();
-    g.drawImage (body, getLocalBounds().toFloat());
-    // LED do ON
-    const auto c = juce::Point<float> ((float) onSwitch.getBounds().getCentreX(), (float) onSwitch.getY() - 14.0f);
-    const juce::Colour led (0xff7dff9a);
-    if (onState) { g.setColour (led.withAlpha (0.35f)); g.fillEllipse (c.x - 9.0f, c.y - 9.0f, 18.0f, 18.0f); }
-    g.setColour (onState ? led : juce::Colour (0xff1d3324));
-    g.fillEllipse (c.x - 4.5f, c.y - 4.5f, 9.0f, 9.0f);
+    const auto m = mapper();
+    {
+        const auto r = getLocalBounds().toFloat().reduced ((float) getWidth() * 0.03f, (float) getHeight() * 0.02f);
+        juce::Path p; p.addRoundedRectangle (r, r.getWidth() * 0.06f);
+        juce::DropShadow (juce::Colours::black.withAlpha (0.8f), 24, { 0, 12 }).drawForPath (g, p);
+    }
+    imgui::draw (g, body, getLocalBounds().toFloat());
+    // botões VALVED / MARK (o escolhido acende em laranja)
+    const auto rv = m.rect (90.0f, 415.0f, 320.0f, 85.0f), rm = m.rect (432.0f, 415.0f, 318.0f, 85.0f);
+    imgui::draw (g, mode == 0 ? btnOn : btnOff, rv);
+    imgui::draw (g, mode == 1 ? btnOn : btnOff, rm);
+    auto label = [&] (juce::Rectangle<float> r, const char* t, bool lit)
+    {
+        juce::Graphics::ScopedSaveState ss (g);
+        g.addTransform (juce::AffineTransform::shear (-0.18f, 0.0f).translated (r.getCentreY() * 0.18f, 0.0f));
+        g.setFont (Fonts::condensedBold (36.0f * m.sc()));
+        g.setColour (lit ? juce::Colour (0xfffff3c8) : juce::Colour (0xffc9ccd1).withAlpha (0.85f));
+        g.drawText (t, r, juce::Justification::centred);
+    };
+    label (rv, "VALVED", mode == 0);
+    label (rm, "MARK", mode == 1);
+    // rótulos das bandas
+    static const char* vl[8] = { "80", "200", "400", "800", "1k6", "3k2", "6k4", "LEVEL" };
+    static const char* ml[8] = { "80", "240", "750", "2200", "6600", "", "", "LEVEL" };
+    static const float trackX[8] = { 172.0f, 240.0f, 310.0f, 380.0f, 450.0f, 520.0f, 590.0f, 695.0f };
+    for (int i = 0; i < 8; ++i)
+        drawText (g, m, mode == 1 ? ml[i] : vl[i], Fonts::condensedBold (26.0f), trackX[i] - 40.0f, 1190.0f, 80.0f, 32.0f,
+                  juce::Justification::centred, juce::Colour (0xffd5d8dc).withAlpha (i == 7 ? 0.95f : 0.8f));
+    if (! onState)
+        imgui::draw (g, ledOff, m.box (414.0f, 1323.0f, 52.0f, 52.0f));
 }
 
 //==============================================================================
@@ -587,11 +441,18 @@ void FxPage::paint (juce::Graphics& g)
 
 void FxPage::resized()
 {
-    auto r = getLocalBounds().reduced (16, 0).withTrimmedTop (42).withTrimmedBottom (14);
-    eqUnit.setBounds (r.removeFromLeft (240));
-    r.removeFromLeft (14);
-    const int w = (r.getWidth() - 14) / 2;
-    delayUnit.setBounds (r.removeFromLeft (w));
-    r.removeFromLeft (14);
-    reverbUnit.setBounds (r);
+    auto r = getLocalBounds().toFloat().reduced (16.0f, 0.0f).withTrimmedTop (36.0f).withTrimmedBottom (8.0f);
+    const float gap = 26.0f;
+    const float sumW = eqUnit.nativeWidth() + delayUnit.nativeWidth() + reverbUnit.nativeWidth();
+    const float maxH = juce::jmax (eqUnit.nativeHeight(), delayUnit.nativeHeight(), reverbUnit.nativeHeight());
+    const float sc = juce::jmin ((r.getWidth() - 2.0f * gap) / sumW, r.getHeight() / maxH);
+    float x = r.getCentreX() - (sumW * sc + 2.0f * gap) * 0.5f;
+    auto place = [&] (juce::Component& c, float nw, float nh)
+    {
+        c.setBounds (juce::Rectangle<float> (x, r.getY() + (maxH - nh) * sc * 0.5f, nw * sc, nh * sc).toNearestInt());
+        x += nw * sc + gap;
+    };
+    place (eqUnit, eqUnit.nativeWidth(), eqUnit.nativeHeight());
+    place (delayUnit, delayUnit.nativeWidth(), delayUnit.nativeHeight());
+    place (reverbUnit, reverbUnit.nativeWidth(), reverbUnit.nativeHeight());
 }

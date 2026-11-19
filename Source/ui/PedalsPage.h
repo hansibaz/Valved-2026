@@ -2,10 +2,11 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Style.h"
+#include "ImgUI.h"
 
 class ValvedProcessor;
 
-// Chave de pé cromada (stomp switch)
+// Chave de pé cromada (stomp switch) desenhada em código (ainda usada fora dos pedais em imagem)
 class FootSwitch : public juce::Button
 {
 public:
@@ -13,19 +14,17 @@ public:
     void paintButton (juce::Graphics&, bool highlighted, bool down) override;
 };
 
-// Mini chave deslizante de dois lados (ex.: 808 / TS9)
-class MiniToggle : public juce::ToggleButton
+// Chave deslizante dos pedais em imagem (808 / TS9 no Green, CHO / VIB no Ensemble):
+// trilho vazio da foto + a bolinha cromada, que vai para a esquerda ou para a direita
+class SlideSwitch : public juce::ToggleButton
 {
 public:
-    MiniToggle (juce::String left, juce::String right, juce::Colour inkColour)
-        : leftText (std::move (left)), rightText (std::move (right)), ink (inkColour) {}
+    SlideSwitch() { setMouseCursor (juce::MouseCursor::PointingHandCursor); }
     void paintButton (juce::Graphics&, bool highlighted, bool down) override;
-private:
-    juce::String leftText, rightText;
-    juce::Colour ink;
+    bool drawSlot = false;   // o trilho do Green já está na foto; o do Ensemble vem da imagem do trilho vazio
 };
 
-// Um pedal desenhado (overdrive ou compressor)
+// Um pedal (foto do UI kit + controles por cima)
 class Stompbox : public juce::Component
 {
 public:
@@ -34,23 +33,24 @@ public:
     void resized() override;
     void refresh();
 
+    float nativeWidth() const;    // tamanho útil da foto (px), para todos ficarem na mesma escala
+    float nativeHeight() const;
     juce::Point<float> jackIn() const;    // posição (no pai) das tomadas, para os cabos
     juce::Point<float> jackOut() const;
 
 private:
-    void renderBody();
-    juce::Rectangle<float> knobRect (int k) const;
+    imgui::Mapper mapper() const;
 
     juce::AudioProcessorValueTreeState& state;
-    int index;               // 0..3 = drives, 4 = compressor, 5 = chorus
+    int index;               // 0..3 = drives (Green, Yellow, Gold, Blue), 4 = compressor (guardado, fora da tela), 5 = chorus
     int numKnobs = 3;
     juce::Slider knobs[4];
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> knobAtt[4];
-    std::unique_ptr<MiniToggle> modeSwitch;
+    std::unique_ptr<SlideSwitch> modeSwitch;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> modeAtt;
-    FootSwitch footswitch;
+    imgui::HitButton footswitch;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> switchAtt;
-    juce::Image body;
+    juce::Image body, ledOff;
     bool ledOn = false;
 };
 
