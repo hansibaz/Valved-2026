@@ -26,6 +26,12 @@ int main (int argc, char** argv)
         PresetManager (p).load (preset);
         juce::AudioBuffer<float> out (2, N), b (2, block);
         juce::MidiBuffer midi;
+        // como numa DAW: deixa o plugin terminar de carregar (caixa/IR em segundo plano) antes de tocar
+        for (int k = 0; k < 40; ++k)
+        {
+            juce::MessageManager::getInstance()->runDispatchLoopUntil (10);
+            b.clear(); p.processBlock (b, midi);
+        }
         bool bad = false; double sum = 0; float peak = 0;
         for (int i0 = 0; i0 < N; i0 += block)
         {

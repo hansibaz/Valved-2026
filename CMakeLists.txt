@@ -177,7 +177,7 @@ if(VLV_BUILD_RENDER)
     target_sources(ValvedRender PRIVATE Tests/RenderPresets.cpp Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/ui/Style.cpp
         Source/ui/AmpHead.cpp Source/ui/CabPage.cpp Source/ui/PedalsPage.cpp Source/ui/FxPage.cpp)
     target_include_directories(ValvedRender PRIVATE Source ThirdParty)
-    target_compile_definitions(ValvedRender PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_STANDALONE_APPLICATION=1)
+    target_compile_definitions(ValvedRender PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1)
     target_link_libraries(ValvedRender PRIVATE ValvedAssets juce::juce_audio_utils juce::juce_audio_formats juce::juce_dsp
         juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
     if (MSVC)
