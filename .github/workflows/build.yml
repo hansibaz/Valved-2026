@@ -49,7 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configurar (Universal: Apple Silicon + Intel)
+      - name: "Configurar (Universal: Apple Silicon + Intel)"
         run: >
           cmake -B build -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
@@ -92,17 +92,17 @@ jobs:
           A=build/Valved_artefacts/Release
           mkdir -p dist
           cp -R "$A/AU/Valved.component" "$A/VST3/Valved.vst3" "$A/Standalone/Valved.app" dist/
-          cat > dist/LEIA-ME.txt <<'TXT'
-          VALVED para macOS (Apple Silicon e Intel)
-
-          Instalação:
-          1) Valved.component -> /Library/Audio/Plug-Ins/Components   (Logic, GarageBand e outros que usam AU)
-          2) Valved.vst3      -> /Library/Audio/Plug-Ins/VST3         (Reaper, Cubase, Studio One, Ableton...)
-          3) Valved.app       -> Aplicativos (versão standalone)
-
-          Se o macOS disser que o arquivo não pode ser aberto, abra o Terminal e rode:
-          xattr -dr com.apple.quarantine /Library/Audio/Plug-Ins/Components/Valved.component /Library/Audio/Plug-Ins/VST3/Valved.vst3 /Applications/Valved.app
-          TXT
+          {
+            echo "VALVED para macOS (Apple Silicon e Intel)"
+            echo ""
+            echo "Instalacao:"
+            echo "1) Valved.component -> /Library/Audio/Plug-Ins/Components   (Logic, GarageBand e outros que usam AU)"
+            echo "2) Valved.vst3      -> /Library/Audio/Plug-Ins/VST3         (Reaper, Cubase, Studio One, Ableton...)"
+            echo "3) Valved.app       -> Aplicativos (versao standalone)"
+            echo ""
+            echo "Se o macOS disser que o arquivo nao pode ser aberto, abra o Terminal e rode:"
+            echo "xattr -dr com.apple.quarantine /Library/Audio/Plug-Ins/Components/Valved.component /Library/Audio/Plug-Ins/VST3/Valved.vst3 /Applications/Valved.app"
+          } > dist/LEIA-ME.txt
           cd dist && ditto -c -k --sequesterRsrc . ../Valved-macOS.zip
 
       - uses: actions/upload-artifact@v4
