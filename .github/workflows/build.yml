@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,12 +44,89 @@ jobs:
           name: Valved-Windows
           path: Valved-Windows.zip
 
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar (Universal: Apple Silicon + Intel)
+        run: >
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15
+          -DVLV_BUILD_RENDER=ON
+
+      - name: Compilar (AU, VST3, Standalone e ferramenta de teste)
+        run: cmake --build build --config Release --parallel 4 --target Valved_AU Valved_VST3 Valved_Standalone ValvedRender
+
+      - name: Assinar (ad-hoc)
+        run: |
+          A=build/Valved_artefacts/Release
+          ls -R $A | head -40
+          for b in "$A/AU/Valved.component" "$A/VST3/Valved.vst3" "$A/Standalone/Valved.app"; do
+            codesign --force --deep --sign - "$b"
+            lipo -info "$(find "$b/Contents/MacOS" -type f | head -1)"
+          done
+
+      - name: Testar o som (gravação de guitarra pelos 15 presets, Apple Silicon e Intel)
+        run: |
+          gunzip -c Tests/audio/guitar_di_48k.f32.gz > di.f32
+          R=$(find build -name ValvedRender -type f -perm -u+x | head -1)
+          echo "== Apple Silicon =="
+          "$R" di.f32 renders_arm64
+          echo "== Intel (Rosetta) =="
+          arch -x86_64 "$R" di.f32 renders_x86_64 || echo "Rosetta indisponível no runner"
+          ditto -c -k --keepParent renders_arm64 Valved-macOS-teste.zip
+
+      - name: Validar o Audio Unit (auval)
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R build/Valved_artefacts/Release/AU/Valved.component ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          sleep 3
+          auval -a | grep -i valved || true
+          auval -strict -v aufx Vld1 Rbzb | tail -40
+
+      - name: Empacotar
+        run: |
+          A=build/Valved_artefacts/Release
+          mkdir -p dist
+          cp -R "$A/AU/Valved.component" "$A/VST3/Valved.vst3" "$A/Standalone/Valved.app" dist/
+          cat > dist/LEIA-ME.txt <<'TXT'
+          VALVED para macOS (Apple Silicon e Intel)
+
+          Instalação:
+          1) Valved.component -> /Library/Audio/Plug-Ins/Components   (Logic, GarageBand e outros que usam AU)
+          2) Valved.vst3      -> /Library/Audio/Plug-Ins/VST3         (Reaper, Cubase, Studio One, Ableton...)
+          3) Valved.app       -> Aplicativos (versão standalone)
+
+          Se o macOS disser que o arquivo não pode ser aberto, abra o Terminal e rode:
+          xattr -dr com.apple.quarantine /Library/Audio/Plug-Ins/Components/Valved.component /Library/Audio/Plug-Ins/VST3/Valved.vst3 /Applications/Valved.app
+          TXT
+          cd dist && ditto -c -k --sequesterRsrc . ../Valved-macOS.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Valved-macOS
+          path: |
+            Valved-macOS.zip
+            Valved-macOS-teste.zip
+
+  release:
+    needs: [windows, macos]
+    if: always() && needs.windows.result == 'success' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: art
+          merge-multiple: true
       - name: Publicar como release (download direto)
-        if: github.ref != 'refs/heads/main'
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "build-${{ github.ref_name }}"
-          gh release delete $tag --yes --cleanup-tag 2>$null
-          gh release create $tag Valved-Windows.zip --target ${{ github.sha }} --prerelease --title "Valved ${{ github.ref_name }} (teste)" --notes "Build automatico do ramo ${{ github.ref_name }}"
+          ls -la art
+          tag="build-${{ github.ref_name }}"
+          gh release delete "$tag" --yes --cleanup-tag -R ${{ github.repository }} 2>/dev/null || true
+          gh release create "$tag" art/*.zip -R ${{ github.repository }} --target ${{ github.sha }} --prerelease \
+            --title "Valved ${{ github.ref_name }} (teste)" --notes "Build automatico do ramo ${{ github.ref_name }} (Windows e macOS)"

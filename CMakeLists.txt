@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Valved VERSION 0.44.0)
+project(Valved VERSION 0.45.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -168,6 +168,25 @@ if(UNIX AND NOT APPLE)
     target_compile_definitions(Valved PUBLIC
         JUCE_ALSA=0 JUCE_JACK=0 JUCE_USE_XRANDR=0 JUCE_USE_XINERAMA=0
         JUCE_USE_XCURSOR=0 JUCE_USE_XSHM=0 JUCE_USE_XRENDER=0)
+endif()
+
+# Ferramenta que toca a gravação de guitarra pelos presets (teste de cada sistema no build automático)
+option(VLV_BUILD_RENDER "Compila o ValvedRender" OFF)
+if(VLV_BUILD_RENDER)
+    juce_add_console_app(ValvedRender PRODUCT_NAME "ValvedRender")
+    target_sources(ValvedRender PRIVATE Tests/RenderPresets.cpp Source/PluginProcessor.cpp Source/PluginEditor.cpp Source/ui/Style.cpp
+        Source/ui/AmpHead.cpp Source/ui/CabPage.cpp Source/ui/PedalsPage.cpp Source/ui/FxPage.cpp)
+    target_include_directories(ValvedRender PRIVATE Source ThirdParty)
+    target_compile_definitions(ValvedRender PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_STANDALONE_APPLICATION=1)
+    target_link_libraries(ValvedRender PRIVATE ValvedAssets juce::juce_audio_utils juce::juce_audio_formats juce::juce_dsp
+        juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+    if (MSVC)
+        target_compile_options(ValvedRender PRIVATE /utf-8)
+    endif()
+    if(UNIX AND NOT APPLE)
+        target_compile_definitions(ValvedRender PRIVATE JUCE_ALSA=0 JUCE_JACK=0 JUCE_USE_XRANDR=0 JUCE_USE_XINERAMA=0
+            JUCE_USE_XCURSOR=0 JUCE_USE_XSHM=0 JUCE_USE_XRENDER=0)
+    endif()
 endif()
 
 option(VLV_BUILD_TESTS "Compila o teste offline" OFF)
