@@ -142,6 +142,18 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
     tunerBtn.setToggleState (proc.tunerActive.load(), juce::dontSendNotification);
     tunerView.setVisible (proc.tunerActive.load());
 
+    if (! proc.license.isActive())
+    {
+        activation = std::make_unique<ActivationView> (proc.license, [this]
+        {
+            juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<ValvedEditor> (this)]
+            {
+                if (sp != nullptr) { sp->activation.reset(); sp->repaint(); }
+            });
+        });
+        addAndMakeVisible (*activation);
+    }
+
     setSize (1100, 720);
     showPage (PageAmp);
     startTimerHz (30);
@@ -239,6 +251,7 @@ void ValvedEditor::refreshLanguage()
         qualityBtn[q].setButtonText (lang::t (qEn[q], qPt[q]));
     }
     lang::applyTree (*this);
+    if (activation != nullptr) activation->refreshLanguage();
     timerCallback();
     repaint();
     for (auto* c : getChildren()) c->repaint();
@@ -305,7 +318,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.45", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.46", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawFittedText (lang::t ("QUALITY", "QUALIDADE"), qualityLabelArea, juce::Justification::centredRight, 1, 0.8f);
 
@@ -322,6 +335,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
 void ValvedEditor::resized()
 {
+    if (activation != nullptr) { activation->setBounds (getLocalBounds()); activation->toFront (false); }
     auto r = getLocalBounds();
     topBar = r.removeFromTop (170);
     mainArea = r;

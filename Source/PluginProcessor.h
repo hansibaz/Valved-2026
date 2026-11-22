@@ -14,6 +14,7 @@
 #include "dsp/Tuner.h"
 #include "dsp/ChorusPedal.h"
 #include "dsp/GraphicEq.h"
+#include "License.h"
 
 namespace ParamID
 {
@@ -96,6 +97,7 @@ namespace ParamID
 class ValvedProcessor : public juce::AudioProcessor, private juce::Timer
 {
 public:
+    vlv::License license;   // ativação (sem licença válida: saída muda e tela de ativação)
     ValvedProcessor();
     ~ValvedProcessor() override;
 

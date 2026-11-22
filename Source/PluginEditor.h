@@ -9,6 +9,7 @@
 #include "ui/FxPage.h"
 #include "ui/TunerView.h"
 #include "ui/PresetBar.h"
+#include "ui/ActivationView.h"
 
 // Knob moderno da barra superior (nome em cima, valor embaixo)
 class TopKnob : public juce::Component
@@ -82,6 +83,7 @@ private:
     int page = PageAmp;
 
     juce::Rectangle<int> topBar, logoArea, mainArea;
+    std::unique_ptr<ActivationView> activation;   // tela de ativação (só aparece sem licença)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ValvedEditor)
 };

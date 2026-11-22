@@ -179,6 +179,7 @@ ValvedProcessor::ValvedProcessor()
                         .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "VALVED", createLayout())
 {
+    license.reload();
     pInput     = apvts.getRawParameterValue (ParamID::input);
     pGate      = apvts.getRawParameterValue (ParamID::gate);
     pTranspose = apvts.getRawParameterValue (ParamID::transpose);
@@ -374,6 +375,7 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     const int numOut = getTotalNumOutputChannels();
     const int n = buffer.getNumSamples();
     if (n == 0) return;
+    if (! license.isActive()) { buffer.clear(); return; }   // não ativado: sem som
 
     if (mono.getNumSamples() < n)
         mono.setSize (1, n, false, false, true);
