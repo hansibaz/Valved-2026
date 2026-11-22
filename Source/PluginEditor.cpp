@@ -144,11 +144,12 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
 
     if (! proc.license.isActive())
     {
-        activation = std::make_unique<ActivationView> (proc.license, [this]
+        juce::Component::SafePointer<ValvedEditor> self (this);
+        activation = std::make_unique<ActivationView> (proc.license, [self]
         {
-            juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<ValvedEditor> (this)]
+            juce::MessageManager::callAsync ([self]
             {
-                if (sp != nullptr) { sp->activation.reset(); sp->repaint(); }
+                if (auto* ed = self.getComponent()) { ed->activation.reset(); ed->repaint(); }
             });
         });
         addAndMakeVisible (*activation);
