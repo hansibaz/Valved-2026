@@ -112,8 +112,28 @@ jobs:
             Valved-macOS.zip
             Valved-macOS-teste.zip
 
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.14.3
+      - name: Compilar o app Valved Cam (Android)
+        run: gradle -p android/ValvedCam assembleRelease --no-daemon --stacktrace
+      - name: Empacotar
+        run: cp android/ValvedCam/app/build/outputs/apk/release/app-release.apk ValvedCam.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ValvedCam
+          path: ValvedCam.apk
+
   release:
-    needs: [windows, macos]
+    needs: [windows, macos, android]
     if: always() && needs.windows.result == 'success' && github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -128,5 +148,6 @@ jobs:
           ls -la art
           tag="build-${{ github.ref_name }}"
           gh release delete "$tag" --yes --cleanup-tag -R ${{ github.repository }} 2>/dev/null || true
-          gh release create "$tag" art/*.zip -R ${{ github.repository }} --target ${{ github.sha }} --prerelease \
-            --title "Valved ${{ github.ref_name }} (teste)" --notes "Build automatico do ramo ${{ github.ref_name }} (Windows e macOS)"
+          files=$(ls art/*.zip art/*.apk 2>/dev/null)
+          gh release create "$tag" $files -R ${{ github.repository }} --target ${{ github.sha }} --prerelease \
+            --title "Valved ${{ github.ref_name }} (teste)" --notes "Build automatico do ramo ${{ github.ref_name }} (Windows, macOS e app Valved Cam para Android)"

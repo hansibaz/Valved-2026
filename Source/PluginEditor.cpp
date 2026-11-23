@@ -91,6 +91,12 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
     };
     addAndMakeVisible (tunerBtn);
 
+    camBtn.setClickingTogglesState (true);
+    camBtn.getProperties().set ("noTr", true);
+    camBtn.setToggleState (proc.camLink.isEnabled(), juce::dontSendNotification);
+    camBtn.onClick = [this] { proc.camLink.setEnabled (camBtn.getToggleState()); lastCamStatus = -1; timerCallback(); };
+    addAndMakeVisible (camBtn);
+
     // Qualidade (sobreamostragem)
     const char* qTips[3] = { "Low: lighter on the CPU (for simpler computers)",
                              "Medium: balanced quality and CPU",
@@ -269,6 +275,23 @@ void ValvedEditor::layoutHead()
 
 void ValvedEditor::timerCallback()
 {
+    {
+        // botão CAM: desligado / procurando o celular / conectado
+        const int st = (int) proc.camLink.getStatus();
+        if (st != lastCamStatus)
+        {
+            lastCamStatus = st;
+            camBtn.setButtonText (st == vlv::CamLink::Connected ? juce::String (juce::CharPointer_UTF8 ("\xe2\x97\x8f CAM"))
+                                : st == vlv::CamLink::Searching ? juce::String ("CAM ...") : juce::String ("CAM"));
+            camBtn.setColour (juce::TextButton::textColourOnId, st == vlv::CamLink::Connected ? juce::Colour (0xff59c97a) : ui::text);
+            camBtn.setTooltip (st == vlv::CamLink::Connected
+                ? lang::t ("Valved Cam connected: ", "Valved Cam conectado: ") + proc.camLink.getDeviceName()
+                : st == vlv::CamLink::Searching
+                    ? lang::t ("Looking for the Valved Cam app (same Wi-Fi or USB tethering)...", "Procurando o app Valved Cam (mesmo Wi-Fi ou ancoragem USB)...")
+                    : lang::t ("Valved Cam: record phone video with the Valved sound", "Valved Cam: grave o vídeo do celular com o som do Valved"));
+        }
+    }
+
     const int ampIdx = (int) proc.apvts.getRawParameterValue (ParamID::amp)->load();
     for (int i = 0; i < ampButtons.size(); ++i)
         ampButtons[i]->setToggleState (i == ampIdx, juce::dontSendNotification);
@@ -319,7 +342,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.46", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.47", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawFittedText (lang::t ("QUALITY", "QUALIDADE"), qualityLabelArea, juce::Justification::centredRight, 1, 0.8f);
 
@@ -345,6 +368,7 @@ void ValvedEditor::resized()
     logoArea = juce::Rectangle<int> (30, 17, 128, 28);   // discreto: ~28 px de altura
     flagEn.setBounds (184, 20, 28, 20);
     flagPt.setBounds (216, 20, 28, 20);
+    camBtn.setBounds (254, 15, 70, 28);
     auto tabs = row1.withSizeKeepingCentre (440, 58);
     for (auto* t : { &pedalsTab, &ampTab, &cabTab, &fxTab })
         t->setBounds (tabs.removeFromLeft (110));

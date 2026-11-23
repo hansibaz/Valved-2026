@@ -252,6 +252,7 @@ bool ValvedProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 void ValvedProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     prepared = false;
+    camLink.setSampleRate (sampleRate);
     mono.setSize (1, juce::jmax (1, samplesPerBlock), false, true, false);
 
     gate.prepare (sampleRate);
@@ -554,6 +555,8 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         if (R != nullptr) outPeak = juce::jmax (outPeak, std::abs (R[i]));
     }
     outputMeter = juce::jmax (outPeak, outputMeter.load() * 0.8f);
+    // 12) Valved Cam: o som final vai para o celular (só quando o app estiver conectado)
+    camLink.push (L, R, n);
 }
 
 void ValvedProcessor::getStateInformation (juce::MemoryBlock& destData)

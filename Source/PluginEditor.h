@@ -68,6 +68,8 @@ private:
     FlagButton flagEn { lang::English }, flagPt { lang::Portuguese };
     PresetBar presetBar;
     juce::TextButton tunerBtn { "TUNER" };
+    juce::TextButton camBtn { "CAM" };   // Valved Cam (app Android): grava o vídeo do celular com o som do Valved
+    int lastCamStatus = -1;
     juce::TextButton qualityBtn[3] { juce::TextButton ("LOW"), juce::TextButton ("MED"), juce::TextButton ("HIGH") };
     juce::Rectangle<int> qualityLabelArea;
     LevelMeter inMeter, outMeter;
