@@ -45,6 +45,7 @@ jobs:
           path: Valved-Windows.zip
 
   macos:
+    if: false   # Mac fora por enquanto (só Windows + Android)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -133,7 +134,7 @@ jobs:
           path: ValvedCam.apk
 
   release:
-    needs: [windows, macos, android]
+    needs: [windows, android]
     if: always() && needs.windows.result == 'success' && github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -150,4 +151,4 @@ jobs:
           gh release delete "$tag" --yes --cleanup-tag -R ${{ github.repository }} 2>/dev/null || true
           files=$(ls art/*.zip art/*.apk 2>/dev/null)
           gh release create "$tag" $files -R ${{ github.repository }} --target ${{ github.sha }} --prerelease \
-            --title "Valved ${{ github.ref_name }} (teste)" --notes "Build automatico do ramo ${{ github.ref_name }} (Windows, macOS e app Valved Cam para Android)"
+            --title "Valved ${{ github.ref_name }} (teste)" --notes "Build automatico do ramo ${{ github.ref_name }} (Windows e app Valved Cam para Android)"
