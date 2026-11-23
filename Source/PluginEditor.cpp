@@ -283,7 +283,10 @@ void ValvedEditor::timerCallback()
             lastCamStatus = st;
             camBtn.setButtonText (st == vlv::CamLink::Connected ? juce::String (juce::CharPointer_UTF8 ("\xe2\x97\x8f CAM"))
                                 : st == vlv::CamLink::Searching ? juce::String ("CAM ...") : juce::String ("CAM"));
-            camBtn.setColour (juce::TextButton::textColourOnId, st == vlv::CamLink::Connected ? juce::Colour (0xff59c97a) : ui::text);
+            const auto camCol = st == vlv::CamLink::Connected ? juce::Colour (0xff59c97a) : st == vlv::CamLink::Searching ? juce::Colour (0xfff0a045) : ui::textDim;
+            camBtn.setColour (juce::TextButton::textColourOnId, camCol);
+            camBtn.setColour (juce::TextButton::textColourOffId, camCol);
+            camBtn.setToggleState (st != vlv::CamLink::Off, juce::dontSendNotification);
             camBtn.setTooltip (st == vlv::CamLink::Connected
                 ? lang::t ("Valved Cam connected: ", "Valved Cam conectado: ") + proc.camLink.getDeviceName()
                 : st == vlv::CamLink::Searching
