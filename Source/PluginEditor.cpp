@@ -128,7 +128,34 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
        #endif
     };
     if (proc.wrapperType == juce::AudioProcessor::wrapperType_Standalone)
+    {
         addAndMakeVisible (audioBtn);
+       #if JucePlugin_Build_Standalone
+        // configuração antiga com várias entradas ligadas: deixa só a primeira delas
+        if (auto* h = juce::StandalonePluginHolder::getInstance())
+        {
+            auto setup = h->deviceManager.getAudioDeviceSetup();
+            if (! setup.useDefaultInputChannels && setup.inputChannels.countNumberOfSetBits() > 1)
+            {
+                const int first = setup.inputChannels.findNextSetBit (0);
+                setup.inputChannels.clear();
+                setup.inputChannels.setBit (first);
+                h->deviceManager.setAudioDeviceSetup (setup, true);
+            }
+            else if (setup.useDefaultInputChannels)
+            {
+                if (auto* dev = h->deviceManager.getCurrentAudioDevice())
+                    if (dev->getActiveInputChannels().countNumberOfSetBits() > 1)
+                    {
+                        setup.useDefaultInputChannels = false;
+                        setup.inputChannels.clear();
+                        setup.inputChannels.setBit (dev->getActiveInputChannels().findNextSetBit (0));
+                        h->deviceManager.setAudioDeviceSetup (setup, true);
+                    }
+            }
+        }
+       #endif
+    }
 
     camBtn.setClickingTogglesState (true);
     camBtn.getProperties().set ("noTr", true);
@@ -386,7 +413,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.48", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.49", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawFittedText (lang::t ("QUALITY", "QUALIDADE"), qualityLabelArea, juce::Justification::centredRight, 1, 0.8f);
 

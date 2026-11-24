@@ -175,7 +175,9 @@ APVTS::ParameterLayout ValvedProcessor::createLayout()
 
 ValvedProcessor::ValvedProcessor()
     : AudioProcessor (BusesProperties()
-                        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                        // standalone: UMA entrada só (a primeira da interface; dá para trocar na engrenagem)
+                        .withInput  ("Input",  juce::PluginHostType::getPluginLoadedAs() == juce::AudioProcessor::wrapperType_Standalone
+                                                   ? juce::AudioChannelSet::mono() : juce::AudioChannelSet::stereo(), true)
                         .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "VALVED", createLayout())
 {
