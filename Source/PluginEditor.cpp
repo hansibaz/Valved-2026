@@ -4,6 +4,51 @@
  #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
 #endif
 
+#if JucePlugin_Build_Standalone
+// Standalone no Windows: sempre abre no ASIO, já na interface de áudio (drivers genéricos só se não houver outro)
+static bool isGenericAsio (const juce::String& n)
+{
+    for (auto* g : { "ASIO4ALL", "Generic Low Latency", "FlexASIO", "Realtek", "ASIO2WASAPI", "Voicemeeter", "VB-Audio" })
+        if (n.containsIgnoreCase (g)) return true;
+    return false;
+}
+
+// devolve true se ficou numa interface de verdade no ASIO
+static bool preferAsio (juce::AudioDeviceManager& dm)
+{
+    auto onInterface = [&] { auto* d = dm.getCurrentAudioDevice(); return dm.getCurrentAudioDeviceType() == "ASIO" && d != nullptr && ! isGenericAsio (d->getName()); };
+    if (dm.getCurrentAudioDeviceType() == "ASIO" && dm.getCurrentAudioDevice() != nullptr) return onInterface();
+    juce::AudioIODeviceType* asio = nullptr;
+    for (auto* t : dm.getAvailableDeviceTypes())
+        if (t->getTypeName() == "ASIO") asio = t;
+    if (asio == nullptr) return false;
+    asio->scanForDevices();
+    auto names = asio->getDeviceNames();
+    if (names.isEmpty()) return false;
+    juce::StringArray order;
+    for (auto& n : names) if (! isGenericAsio (n)) order.add (n);
+    for (auto& n : names) if (isGenericAsio (n)) order.add (n);
+
+    const auto prevType = dm.getCurrentAudioDeviceType();
+    const auto prevSetup = dm.getAudioDeviceSetup();
+    dm.setCurrentAudioDeviceType ("ASIO", true);
+    for (auto& n : order)
+    {
+        auto setup = dm.getAudioDeviceSetup();
+        setup.inputDeviceName = setup.outputDeviceName = n;
+        setup.useDefaultInputChannels = false;
+        setup.inputChannels.clear();
+        setup.inputChannels.setBit (0);           // entrada 1
+        setup.useDefaultOutputChannels = true;
+        if (dm.setAudioDeviceSetup (setup, true).isEmpty() && dm.getCurrentAudioDevice() != nullptr) return onInterface();
+    }
+    // nenhum driver ASIO abriu: volta para o que estava
+    dm.setCurrentAudioDeviceType (prevType, true);
+    dm.setAudioDeviceSetup (prevSetup, true);
+    return false;
+}
+#endif
+
 void ValvedEditor::GearButton::paintButton (juce::Graphics& g, bool over, bool down)
 {
     auto r = getLocalBounds().toFloat().reduced (1.0f);
@@ -134,6 +179,10 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
         // configuração antiga com várias entradas ligadas: deixa só a primeira delas
         if (auto* h = juce::StandalonePluginHolder::getInstance())
         {
+           #if JUCE_WINDOWS
+            // numa interface de verdade (fone/monitor), libera a entrada: não precisa do aviso de microfonia
+            if (preferAsio (h->deviceManager)) h->getMuteInputValue().setValue (false);
+           #endif
             auto setup = h->deviceManager.getAudioDeviceSetup();
             if (! setup.useDefaultInputChannels && setup.inputChannels.countNumberOfSetBits() > 1)
             {
@@ -413,7 +462,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.49", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.50", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawFittedText (lang::t ("QUALITY", "QUALIDADE"), qualityLabelArea, juce::Justification::centredRight, 1, 0.8f);
 
