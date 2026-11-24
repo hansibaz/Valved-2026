@@ -1,4 +1,34 @@
 #include "PluginEditor.h"
+#if JucePlugin_Build_Standalone
+ #include <juce_audio_utils/juce_audio_utils.h>
+ #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
+#endif
+
+void ValvedEditor::GearButton::paintButton (juce::Graphics& g, bool over, bool down)
+{
+    auto r = getLocalBounds().toFloat().reduced (1.0f);
+    g.setColour (juce::Colours::white.withAlpha (down ? 0.16f : over ? 0.10f : 0.05f));
+    g.fillRoundedRectangle (r, 6.0f);
+    g.setColour (juce::Colours::white.withAlpha (0.18f));
+    g.drawRoundedRectangle (r, 6.0f, 1.0f);
+    const auto c = r.getCentre();
+    const float R = juce::jmin (r.getWidth(), r.getHeight()) * 0.34f;
+    juce::Path p;
+    for (int i = 0; i < 8; ++i)
+    {
+        const float a = juce::MathConstants<float>::twoPi * (float) i / 8.0f;
+        juce::Path t;
+        t.addRoundedRectangle (-R * 0.2f, -R * 1.28f, R * 0.4f, R * 0.55f, R * 0.08f);
+        t.applyTransform (juce::AffineTransform::rotation (a).translated (c.x, c.y));
+        p.addPath (t);
+    }
+    p.addEllipse (c.x - R, c.y - R, 2 * R, 2 * R);
+    p.setUsingNonZeroWinding (true);
+    g.setColour (over ? juce::Colour (0xfff0a045) : juce::Colour (0xffcfcfd4));
+    g.fillPath (p);
+    g.setColour (juce::Colour (0xff141216));
+    g.fillEllipse (c.x - R * 0.42f, c.y - R * 0.42f, R * 0.84f, R * 0.84f);
+}
 
 using namespace ui;
 
@@ -90,6 +120,15 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
         if (tunerBtn.getToggleState()) tunerView.toFront (false);
     };
     addAndMakeVisible (tunerBtn);
+
+    audioBtn.onClick = []
+    {
+       #if JucePlugin_Build_Standalone
+        if (auto* h = juce::StandalonePluginHolder::getInstance()) h->showAudioSettingsDialog();
+       #endif
+    };
+    if (proc.wrapperType == juce::AudioProcessor::wrapperType_Standalone)
+        addAndMakeVisible (audioBtn);
 
     camBtn.setClickingTogglesState (true);
     camBtn.getProperties().set ("noTr", true);
@@ -246,6 +285,8 @@ void ValvedEditor::FlagButton::paintButton (juce::Graphics& g, bool highlighted,
 
 void ValvedEditor::refreshLanguage()
 {
+    audioBtn.setTooltip (lang::t ("Audio settings: interface, input/output and buffer", "Configurações de áudio: interface, entrada/saída e buffer"));
+    lastCamStatus = -1;
     input.label.setText (lang::t ("INPUT", "ENTRADA"), juce::dontSendNotification);
     gate.label.setText ("GATE", juce::dontSendNotification);
     transpose.label.setText (lang::t ("TRANSPOSE", "TRANSPOR"), juce::dontSendNotification);
@@ -345,7 +386,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.47", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.48", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawFittedText (lang::t ("QUALITY", "QUALIDADE"), qualityLabelArea, juce::Justification::centredRight, 1, 0.8f);
 
@@ -372,6 +413,7 @@ void ValvedEditor::resized()
     flagEn.setBounds (184, 20, 28, 20);
     flagPt.setBounds (216, 20, 28, 20);
     camBtn.setBounds (254, 15, 70, 28);
+    audioBtn.setBounds (getWidth() - 24 - 46 - 3 * 46 - 70 - 40, 15, 32, 28);   // à esquerda de QUALIDADE
     auto tabs = row1.withSizeKeepingCentre (440, 58);
     for (auto* t : { &pedalsTab, &ampTab, &cabTab, &fxTab })
         t->setBounds (tabs.removeFromLeft (110));

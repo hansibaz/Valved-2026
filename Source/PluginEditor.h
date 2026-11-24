@@ -68,6 +68,13 @@ private:
     FlagButton flagEn { lang::English }, flagPt { lang::Portuguese };
     PresetBar presetBar;
     juce::TextButton tunerBtn { "TUNER" };
+    // engrenagem: configurações de áudio (interface, entrada/saída, buffer) — só na versão standalone
+    struct GearButton : public juce::Button
+    {
+        GearButton() : juce::Button ("audio") { setMouseCursor (juce::MouseCursor::PointingHandCursor); }
+        void paintButton (juce::Graphics&, bool over, bool down) override;
+    };
+    GearButton audioBtn;
     juce::TextButton camBtn { "CAM" };   // Valved Cam (app Android): grava o vídeo do celular com o som do Valved
     int lastCamStatus = -1;
     juce::TextButton qualityBtn[3] { juce::TextButton ("LOW"), juce::TextButton ("MED"), juce::TextButton ("HIGH") };

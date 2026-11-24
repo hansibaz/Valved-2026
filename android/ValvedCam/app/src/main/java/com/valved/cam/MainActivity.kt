@@ -70,6 +70,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var expBar: SeekBar
     private lateinit var expLabel: TextView
     private lateinit var syncLabel: TextView
+    private lateinit var flipButton: TextView
+    private lateinit var flipLabel: TextView
     private val pills = mutableMapOf<String, TextView>()
     private val ui = Handler(Looper.getMainLooper())
 
@@ -325,6 +327,7 @@ class MainActivity : ComponentActivity() {
         recButton.scaleX = if (on) 0.55f else 1f
         recButton.scaleY = if (on) 0.55f else 1f
         timerText.visibility = if (on) View.VISIBLE else View.INVISIBLE
+        flipButton.alpha = if (on) 0.3f else 1f
         for ((k, v) in pills) if (k != "torch" && !k.startsWith("z")) { v.isEnabled = !on; v.alpha = if (on) 0.35f else 1f }
     }
 
@@ -367,6 +370,7 @@ class MainActivity : ComponentActivity() {
         pills["torch"]?.apply { text = if (torch) "Luz ON" else "Luz"; alpha = if (camera?.cameraInfo?.hasFlashUnit() == true) 1f else 0.4f }
         pills["grid"]?.text = if (grid) "Grade ON" else "Grade"
         pills["flip"]?.text = if (useFront) "Frontal" else "Traseira"
+        flipLabel.text = if (useFront) "Frontal" else "Traseira"
         overlay.showGrid = grid
         overlay.invalidate()
         syncLabel.text = "Sincronia do som: $syncMs ms"
@@ -476,7 +480,24 @@ class MainActivity : ComponentActivity() {
             background = GradientDrawable().apply { cornerRadius = dp(36).toFloat(); setColor(Color.rgb(230, 50, 45)) }
         }
         recOuter.addView(recButton, FrameLayout.LayoutParams(dp(60), dp(60), Gravity.CENTER))
-        bottom.addView(recOuter, LinearLayout.LayoutParams(dp(78), dp(78)))
+        // REC no meio; à direita, o botão de trocar câmera (frontal/traseira), como no app de câmera do celular
+        val recRow = FrameLayout(this)
+        recRow.addView(recOuter, FrameLayout.LayoutParams(dp(78), dp(78), Gravity.CENTER))
+        flipButton = TextView(this).apply {
+            text = "⟲"
+            textSize = 26f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.argb(160, 40, 38, 44)) }
+            contentDescription = "Trocar câmera"
+            setOnClickListener { if (recording == null) { useFront = !useFront; bindCamera() } }
+        }
+        val flipCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
+        flipCol.addView(flipButton, LinearLayout.LayoutParams(dp(54), dp(54)))
+        flipLabel = TextView(this).apply { setTextColor(Color.WHITE); textSize = 11f; gravity = Gravity.CENTER }
+        flipCol.addView(flipLabel)
+        recRow.addView(flipCol, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL or Gravity.END).apply { marginEnd = dp(28) })
+        bottom.addView(recRow, LinearLayout.LayoutParams(-1, dp(84)))
         root.addView(bottom, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
 
         setContentView(root)
