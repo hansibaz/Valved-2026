@@ -18,6 +18,7 @@ public:
                                            .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
     {
         link.setEnabled (true);   // a função do plugin é essa: já começa procurando o celular
+        english = ! juce::SystemStats::getUserLanguage().startsWithIgnoreCase ("pt");   // idioma do sistema
     }
 
     bool isBusesLayoutSupported (const BusesLayout& l) const override
@@ -60,15 +61,21 @@ public:
     {
         juce::XmlElement x ("VALVEDCAMLINK");
         x.setAttribute ("enabled", link.isEnabled());
+        x.setAttribute ("lang", english.load() ? "en" : "pt");
         copyXmlToBinary (x, dest);
     }
     void setStateInformation (const void* data, int size) override
     {
-        if (auto x = getXmlFromBinary (data, size)) link.setEnabled (x->getBoolAttribute ("enabled", true));
+        if (auto x = getXmlFromBinary (data, size))
+        {
+            link.setEnabled (x->getBoolAttribute ("enabled", true));
+            if (x->hasAttribute ("lang")) english = x->getStringAttribute ("lang") != "pt";
+        }
     }
 
     vlv::CamLink link;
     std::atomic<float> level { 0.0f };
+    std::atomic<bool> english { true };
 };
 
 class CamLinkEditor : public juce::AudioProcessorEditor, private juce::Timer
@@ -85,6 +92,10 @@ public:
         power.setColour (juce::TextButton::textColourOffId, txt);
         power.setColour (juce::TextButton::textColourOnId, bg);
         addAndMakeVisible (power);
+        langBtn.setColour (juce::TextButton::buttonColourId, panel);
+        langBtn.setColour (juce::TextButton::textColourOffId, dim);
+        langBtn.onClick = [this] { proc.english = ! proc.english.load(); timerCallback(); };
+        addAndMakeVisible (langBtn);
         startTimerHz (15);
         timerCallback();
     }
@@ -117,19 +128,19 @@ public:
         row.removeFromLeft (8.0f);
         g.setColour (txt);
         g.setFont (juce::Font (juce::FontOptions (16.0f, juce::Font::bold)));
-        g.drawText (st == vlv::CamLink::Connected ? juce::String (juce::CharPointer_UTF8 ("Conectado ao Valved Cam"))
-                    : st == vlv::CamLink::Searching ? juce::String ("Procurando o celular...")
-                    : juce::String ("Desligado"), row, juce::Justification::centredLeft);
+        g.drawText (st == vlv::CamLink::Connected ? t ("Connected to Valved Cam", "Conectado ao Valved Cam")
+                    : st == vlv::CamLink::Searching ? t ("Looking for your phone...", "Procurando o celular...")
+                    : t ("Off", "Desligado"), row, juce::Justification::centredLeft);
 
         g.setColour (dim);
         g.setFont (juce::Font (juce::FontOptions (13.0f)));
         auto info = c.removeFromTop (20.0f);
         if (st == vlv::CamLink::Connected)
-            g.drawText (juce::String (juce::CharPointer_UTF8 ("Celular: ")) + proc.link.getDeviceName(), info, juce::Justification::centredLeft);
+            g.drawText (t ("Phone: ", "Celular: ") + proc.link.getDeviceName(), info, juce::Justification::centredLeft);
         else if (st == vlv::CamLink::Searching)
-            g.drawText (juce::String (juce::CharPointer_UTF8 ("Abra o app Valved Cam (mesmo Wi-Fi ou ancoragem USB)")), info, juce::Justification::centredLeft);
+            g.drawText (t ("Open the Valved Cam app (same Wi-Fi or USB tethering)", "Abra o app Valved Cam (mesmo Wi-Fi ou ancoragem USB)"), info, juce::Justification::centredLeft);
         else
-            g.drawText (juce::String (juce::CharPointer_UTF8 ("Ligue para mandar o som para o celular")), info, juce::Justification::centredLeft);
+            g.drawText (t ("Turn it on to send the sound to your phone", "Ligue para mandar o som para o celular"), info, juce::Justification::centredLeft);
 
         // medidor do som que está indo
         auto meter = c.removeFromTop (22.0f).reduced (0.0f, 6.0f);
@@ -143,7 +154,8 @@ public:
         bottom.removeFromLeft (130);
         g.setColour (dim);
         g.setFont (juce::Font (juce::FontOptions (12.5f)));
-        g.drawFittedText (juce::String (juce::CharPointer_UTF8 ("Coloque como o ÚLTIMO plugin da trilha. O som passa sem nenhuma alteração.")),
+        g.drawFittedText (t ("Insert it as the LAST plugin on the track. The sound passes through untouched.",
+                             "Coloque como o ÚLTIMO plugin da trilha. O som passa sem nenhuma alteração."),
                           bottom.reduced (10, 0), juce::Justification::centredLeft, 2);
     }
 
@@ -152,17 +164,24 @@ public:
         auto r = getLocalBounds().reduced (16);
         r.removeFromTop (34 + 8 + 92 + 10);
         power.setBounds (r.removeFromTop (40).removeFromLeft (120));
+        langBtn.setBounds (getWidth() - 16 - 64, 20, 64, 24);
     }
 
 private:
     void timerCallback() override
     {
-        power.setButtonText (proc.link.isEnabled() ? "LIGADO" : "DESLIGADO");
+        power.setButtonText (proc.link.isEnabled() ? t ("ON", "LIGADO") : t ("OFF", "DESLIGADO"));
+        langBtn.setButtonText (proc.english.load() ? "EN | pt" : "en | PT");
         repaint();
     }
 
+    juce::String t (const char* en, const char* pt) const
+    {
+        return juce::String (juce::CharPointer_UTF8 (proc.english.load() ? en : pt));
+    }
+
     CamLinkProcessor& proc;
-    juce::TextButton power;
+    juce::TextButton power, langBtn;
 };
 
 juce::AudioProcessorEditor* CamLinkProcessor::createEditor() { return new CamLinkEditor (*this); }

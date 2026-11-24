@@ -102,7 +102,7 @@ class MainActivity : ComponentActivity() {
     @Volatile private var saving = false
 
     private val permLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) startCamera() else statusText.text = "Permita o uso da câmera para gravar."
+        if (ok) startCamera() else statusText.text = tr("Allow camera access to record.", "Permita o uso da câmera para gravar.")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -204,11 +204,11 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             // combinação não suportada (ex.: 4K a 60 fps): volta para o padrão
             if (fps != 30 || quality != "FHD") {
-                toast("Essa combinação não funciona neste celular. Voltando para 1080p 30fps.")
+                toast(tr("This combination doesn't work on this phone. Going back to 1080p 30fps.", "Essa combinação não funciona neste celular. Voltando para 1080p 30fps."))
                 fps = 30; quality = "FHD"; stabilization = false
                 return bindCamera()
             }
-            statusText.text = "Erro ao abrir a câmera: ${e.message}"
+            statusText.text = tr("Could not open the camera: ", "Erro ao abrir a câmera: ") + e.message
             return
         }
         torch = false
@@ -231,16 +231,16 @@ class MainActivity : ComponentActivity() {
             expBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(s: SeekBar?, v: Int, fromUser: Boolean) {
                     val idx = v + r.lower
-                    expLabel.text = "Exposição " + (if (idx > 0) "+$idx" else "$idx")
+                    expLabel.text = tr("Exposure ", "Exposição ") + (if (idx > 0) "+$idx" else "$idx")
                     if (fromUser) cam.cameraControl.setExposureCompensationIndex(idx)
                 }
                 override fun onStartTrackingTouch(s: SeekBar?) {}
                 override fun onStopTrackingTouch(s: SeekBar?) {}
             })
-            expLabel.text = "Exposição " + es.exposureCompensationIndex
+            expLabel.text = tr("Exposure ", "Exposição ") + es.exposureCompensationIndex
         } else {
             expBar.isEnabled = false
-            expLabel.text = "Exposição (não suportada)"
+            expLabel.text = tr("Exposure (not supported)", "Exposição (não suportada)")
         }
     }
 
@@ -276,7 +276,7 @@ class MainActivity : ComponentActivity() {
                         val bytes = link.stopCapture()
                         recording = null
                         setRecordingUi(false)
-                        if (ev.hasError() && !v.exists()) { toast("Erro na gravação (${ev.error})"); return@start }
+                        if (ev.hasError() && !v.exists()) { toast(tr("Recording error ", "Erro na gravação ") + "(${ev.error})"); return@start }
                         saveToGallery(v, if (bytes > 0) a else null)
                     }
                     else -> {}
@@ -286,7 +286,7 @@ class MainActivity : ComponentActivity() {
 
     private fun saveToGallery(video: File, pcm: File?) {
         saving = true
-        statusText.text = "Salvando o vídeo..."
+        statusText.text = tr("Saving video...", "Salvando o vídeo...")
         val sr = link.sampleRate
         val ch = link.channels
         val audioStartUs = if (pcm != null && link.capFirstSampleNs > 0 && videoStartNs > 0)
@@ -309,11 +309,11 @@ class MainActivity : ComponentActivity() {
                 values.clear()
                 values.put(MediaStore.Video.Media.IS_PENDING, 0)
                 contentResolver.update(uri, values, null, null)
-                msg = if (pcm != null) "Salvo na galeria (Movies/ValvedCam) com o som do Valved!"
-                      else "Salvo SEM o som do Valved (o plugin não estava conectado)."
+                msg = if (pcm != null) tr("Saved to the gallery (Movies/ValvedCam) with your plugin sound!", "Salvo na galeria (Movies/ValvedCam) com o som do plugin!")
+                      else tr("Saved WITHOUT the plugin sound (the plugin was not connected).", "Salvo SEM o som do plugin (o plugin não estava conectado).")
             } catch (e: Exception) {
                 if (uri != null) contentResolver.delete(uri, null, null)
-                msg = "Erro ao salvar: ${e.message}"
+                msg = tr("Error saving: ", "Erro ao salvar: ") + e.message
             }
             video.delete(); pcm?.delete()
             ui.post { saving = false; toast(msg) }
@@ -337,9 +337,9 @@ class MainActivity : ComponentActivity() {
             val meter = "▮".repeat(bars) + "▯".repeat(10 - bars)
             if (!saving) {
                 statusText.text = if (link.connected)
-                    "● Valved conectado  ${link.sampleRate / 1000.0} kHz   $meter"
+                    tr("● Plugin connected  ", "● Plugin conectado  ") + "${link.sampleRate / 1000.0} kHz   $meter"
                 else
-                    "Procurando o Valved...  (mesmo Wi-Fi ou ancoragem USB)\nIP do celular: " + link.localAddresses().joinToString("  ")
+                    tr("Looking for the plugin...  (same Wi-Fi or USB tethering)\nPhone IP: ", "Procurando o plugin...  (mesmo Wi-Fi ou ancoragem USB)\nIP do celular: ") + link.localAddresses().joinToString("  ")
                 statusText.setTextColor(if (link.connected) Color.rgb(120, 220, 140) else Color.rgb(240, 200, 120))
             }
             if (recording != null && recStartWall > 0) {
@@ -366,20 +366,24 @@ class MainActivity : ComponentActivity() {
     private fun refreshPills() {
         pills["res"]?.text = when (quality) { "SD" -> "480p"; "HD" -> "720p"; "UHD" -> "4K"; else -> "1080p" }
         pills["fps"]?.apply { text = "$fps fps"; alpha = if (supports60) 1f else 0.4f }
-        pills["stab"]?.apply { text = if (stabilization) "Estab. ON" else "Estab. OFF"; alpha = if (supportsStab) 1f else 0.4f }
-        pills["torch"]?.apply { text = if (torch) "Luz ON" else "Luz"; alpha = if (camera?.cameraInfo?.hasFlashUnit() == true) 1f else 0.4f }
-        pills["grid"]?.text = if (grid) "Grade ON" else "Grade"
-        pills["flip"]?.text = if (useFront) "Frontal" else "Traseira"
-        flipLabel.text = if (useFront) "Frontal" else "Traseira"
+        pills["stab"]?.apply { text = if (stabilization) tr("Stab. ON", "Estab. ON") else tr("Stab. OFF", "Estab. OFF"); alpha = if (supportsStab) 1f else 0.4f }
+        pills["torch"]?.apply { text = if (torch) tr("Light ON", "Luz ON") else tr("Light", "Luz"); alpha = if (camera?.cameraInfo?.hasFlashUnit() == true) 1f else 0.4f }
+        pills["grid"]?.text = if (grid) tr("Grid ON", "Grade ON") else tr("Grid", "Grade")
+        pills["flip"]?.text = if (useFront) tr("Front", "Frontal") else tr("Back", "Traseira")
+        flipLabel.text = if (useFront) tr("Front", "Frontal") else tr("Back", "Traseira")
         overlay.showGrid = grid
         overlay.invalidate()
-        syncLabel.text = "Sincronia do som: $syncMs ms"
+        syncLabel.text = tr("Audio sync: ", "Sincronia do som: ") + "$syncMs ms"
     }
 
     private fun savePrefs() {
         prefs.edit().putBoolean("front", useFront).putString("quality", quality).putInt("fps", fps)
             .putBoolean("stab", stabilization).putBoolean("grid", grid).putInt("sync", syncMs).apply()
     }
+
+    // idioma do celular: português se o aparelho estiver em português, senão inglês
+    private val pt = Locale.getDefault().language == "pt"
+    private fun tr(en: String, ptText: String) = if (pt) ptText else en
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_LONG).show()
 
@@ -424,8 +428,8 @@ class MainActivity : ComponentActivity() {
             val order = listOf("SD", "HD", "FHD", "UHD").filter { n -> supportedQualities.isEmpty() || supportedQualities.any { nameOf(it) == n } }
             quality = order[(order.indexOf(quality) + 1) % order.size]; bindCamera()
         })
-        add(pill("fps") { if (supports60) { fps = if (fps == 30) 60 else 30; bindCamera() } else toast("Este celular não grava a 60 fps aqui.") })
-        add(pill("stab") { if (supportsStab) { stabilization = !stabilization; bindCamera() } else toast("Estabilização não disponível nesta câmera.") })
+        add(pill("fps") { if (supports60) { fps = if (fps == 30) 60 else 30; bindCamera() } else toast(tr("This phone can't record 60 fps here.", "Este celular não grava a 60 fps aqui.")) })
+        add(pill("stab") { if (supportsStab) { stabilization = !stabilization; bindCamera() } else toast(tr("Stabilization not available on this camera.", "Estabilização não disponível nesta câmera.")) })
         add(pill("torch") {
             val cam = camera ?: return@pill
             if (cam.cameraInfo.hasFlashUnit()) { torch = !torch; cam.cameraControl.enableTorch(torch); refreshPills() }
@@ -459,7 +463,7 @@ class MainActivity : ComponentActivity() {
         val syncBar = SeekBar(this).apply {
             max = 400; progress = syncMs
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, v: Int, fromUser: Boolean) { syncMs = v; syncLabel.text = "Sincronia do som: $v ms" }
+                override fun onProgressChanged(s: SeekBar?, v: Int, fromUser: Boolean) { syncMs = v; syncLabel.text = tr("Audio sync: ", "Sincronia do som: ") + "$v ms" }
                 override fun onStartTrackingTouch(s: SeekBar?) {}
                 override fun onStopTrackingTouch(s: SeekBar?) { savePrefs() }
             })
@@ -489,7 +493,7 @@ class MainActivity : ComponentActivity() {
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
             background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.argb(160, 40, 38, 44)) }
-            contentDescription = "Trocar câmera"
+            contentDescription = tr("Switch camera", "Trocar câmera")
             setOnClickListener { if (recording == null) { useFront = !useFront; bindCamera() } }
         }
         val flipCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
