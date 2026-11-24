@@ -231,13 +231,16 @@ private:
                 set (ParamID::gate, -72.0f);
                 reverb (0, 3.5f, 12.0f);
                 break;
-            case 3: // Brit Lead
-                amp (1, 8.0f, 5.0f, 6.5f, 6.0f, 6.0f, 5.0f);
-                cab (1, 0, 0.22f);
-                pedal (2, 3.0f, 5.5f, 4.5f);   // Gold Drive empurrando
-                set (ParamID::gate, -68.0f);
-                delay (1, 420.0f, 4.0f, 22.0f, 5.0f, 3.0f);
-                reverb (2, 5.0f, 15.0f);
+            case 3: // Brit Lead (regulagem do Rapha): Brit80 no talo empurrado pelo Yellow Drive como boost limpo,
+                    // EQ tirando o grave embolado, tape delay e sala
+                amp (1, 10.0f, 5.0f, 6.5f, 6.0f, 5.5f, 5.0f);
+                cab (1, 0, 0.25f);
+                pedal (1, 0.0f, 6.4f, 10.0f);
+                set (ParamID::gate, -67.2f);
+                set (ParamID::eqOn, 1.0f); set (ParamID::eqMode, 0.0f);
+                set (ParamID::eqBand (0, 0), -5.75f); set (ParamID::eqBand (0, 5), 1.5f);
+                delay (1, 658.0f, 2.4f, 16.0f, 6.0f, 2.0f);
+                reverb (0, 3.5f, 11.0f);
                 break;
             case 4: // Blues Breaker
                 amp (1, 4.5f, 5.5f, 6.0f, 5.5f, 5.0f, 5.0f);
