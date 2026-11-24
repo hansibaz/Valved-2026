@@ -38,11 +38,16 @@ jobs:
           Copy-Item -Recurse "build/Valved_artefacts/Release/VST3/Valved.vst3" dist/
           Copy-Item "build/Valved_artefacts/Release/Standalone/Valved.exe" dist/
           Compress-Archive -Path dist/* -DestinationPath Valved-Windows.zip
+          New-Item -ItemType Directory -Force -Path distlink | Out-Null
+          Copy-Item -Recurse "build/ValvedCamLink_artefacts/Release/VST3/Valved Cam Link.vst3" distlink/
+          Compress-Archive -Path distlink/* -DestinationPath ValvedCamLink-Windows.zip
 
       - uses: actions/upload-artifact@v4
         with:
           name: Valved-Windows
-          path: Valved-Windows.zip
+          path: |
+            Valved-Windows.zip
+            ValvedCamLink-Windows.zip
 
   macos:
     if: false   # Mac fora por enquanto (só Windows + Android)

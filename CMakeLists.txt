@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Valved VERSION 0.52.0)
+project(Valved VERSION 0.53.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -214,3 +214,40 @@ target_link_libraries(Valved
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+# ---------------------------------------------------------------- Valved Cam Link
+# Plugin "ponte": último na trilha, manda o som de QUALQUER plugin para o app Valved Cam.
+set(VLV_LINK_FORMATS VST3)
+if(APPLE)
+    set(VLV_LINK_FORMATS VST3 AU)
+endif()
+juce_add_plugin(ValvedCamLink
+    COMPANY_NAME "Rapha Bueno"
+    BUNDLE_ID com.raphabueno.valvedcamlink
+    PLUGIN_MANUFACTURER_CODE Rbzb
+    PLUGIN_CODE Vclk
+    FORMATS ${VLV_LINK_FORMATS}
+    PRODUCT_NAME "Valved Cam Link"
+    IS_SYNTH FALSE
+    NEEDS_MIDI_INPUT FALSE
+    NEEDS_MIDI_OUTPUT FALSE
+    IS_MIDI_EFFECT FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    COPY_PLUGIN_AFTER_BUILD FALSE
+    VST3_CATEGORIES Fx Tools
+    AU_MAIN_TYPE kAudioUnitType_Effect)
+target_sources(ValvedCamLink PRIVATE Source/camlink/CamLinkPlugin.cpp)
+target_include_directories(ValvedCamLink PRIVATE Source)
+if (MSVC)
+    target_compile_options(ValvedCamLink PRIVATE /utf-8)
+endif()
+target_compile_definitions(ValvedCamLink PUBLIC
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_DISPLAY_SPLASH_SCREEN=0)
+if(UNIX AND NOT APPLE)
+    target_compile_definitions(ValvedCamLink PUBLIC
+        JUCE_ALSA=0 JUCE_JACK=0 JUCE_USE_XRANDR=0 JUCE_USE_XINERAMA=0
+        JUCE_USE_XCURSOR=0 JUCE_USE_XSHM=0 JUCE_USE_XRENDER=0)
+endif()
+target_link_libraries(ValvedCamLink
+    PRIVATE juce::juce_audio_utils
+    PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
