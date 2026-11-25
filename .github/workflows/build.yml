@@ -139,7 +139,7 @@ jobs:
           path: ValvedCam.apk
 
   ios:
-    runs-on: macos-15
+    runs-on: macos-15-intel   # Intel: a fila dos Macs arm64 do GitHub está lotada
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
