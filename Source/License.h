@@ -10,6 +10,14 @@
 
 namespace vlv
 {
+// cada produto tem seu prefixo e sua pasta (o Valved Cam Link usa "VALVEDCAM1|" e "Valved Cam Link")
+#ifndef VLV_LICENSE_PREFIX
+ #define VLV_LICENSE_PREFIX "VALVED1|"
+#endif
+#ifndef VLV_LICENSE_FOLDER
+ #define VLV_LICENSE_FOLDER "Valved"
+#endif
+
 class License
 {
 public:
@@ -43,7 +51,7 @@ public:
 
         // bloco esperado: 00 01 FF..FF 00 || DigestInfo(SHA-256) || hash
         static const juce::uint8 prefix[] = { 0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20 };
-        const juce::String msg = "VALVED1|" + em;
+        const juce::String msg = VLV_LICENSE_PREFIX + em;
         const auto hash = juce::SHA256 (msg.toUTF8()).getRawData();
         if (hash.getSize() != 32) return false;
         juce::uint8 want[K];
@@ -61,7 +69,7 @@ public:
 
     static juce::File file()
     {
-        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Valved").getChildFile ("license.xml");
+        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile (VLV_LICENSE_FOLDER).getChildFile ("license.xml");
     }
 
     // lê o arquivo e confere; devolve true se ativado

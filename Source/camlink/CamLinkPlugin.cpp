@@ -2,7 +2,9 @@
 // mexer em nada e manda esse som (de qualquer plugin de guitarra, de qualquer marca) para o app Valved Cam.
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <juce_cryptography/juce_cryptography.h>
 #include "../CamLink.h"
+#include "../License.h"
 
 namespace
 {
@@ -17,9 +19,13 @@ public:
         : AudioProcessor (BusesProperties().withInput ("Input", juce::AudioChannelSet::stereo(), true)
                                            .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
     {
-        link.setEnabled (true);   // a função do plugin é essa: já começa procurando o celular
         english = ! juce::SystemStats::getUserLanguage().startsWithIgnoreCase ("pt");   // idioma do sistema
+        license.reload();
+        applyEnable (true);   // a função do plugin é essa: já começa procurando o celular (se estiver ativado)
     }
+
+    // só conecta no celular com a licença ativada
+    void applyEnable (bool want) { wantEnabled = want; link.setEnabled (want && license.isActive()); }
 
     bool isBusesLayoutSupported (const BusesLayout& l) const override
     {
@@ -42,7 +48,8 @@ public:
         float pk = 0.0f;
         for (int i = 0; i < n; ++i) pk = juce::jmax (pk, std::abs (L[i]));
         level = juce::jmax (pk, level.load() * 0.85f);
-        link.push (L, R, n);   // o som passa intacto; só uma cópia vai para o celular
+        if (license.isActive())
+            link.push (L, R, n);   // o som passa intacto; só uma cópia vai para o celular (só com a licença ativada)
     }
 
     juce::AudioProcessorEditor* createEditor() override;
@@ -60,7 +67,7 @@ public:
     void getStateInformation (juce::MemoryBlock& dest) override
     {
         juce::XmlElement x ("VALVEDCAMLINK");
-        x.setAttribute ("enabled", link.isEnabled());
+        x.setAttribute ("enabled", wantEnabled.load());
         x.setAttribute ("lang", english.load() ? "en" : "pt");
         copyXmlToBinary (x, dest);
     }
@@ -68,7 +75,7 @@ public:
     {
         if (auto x = getXmlFromBinary (data, size))
         {
-            link.setEnabled (x->getBoolAttribute ("enabled", true));
+            applyEnable (x->getBoolAttribute ("enabled", true));
             if (x->hasAttribute ("lang")) english = x->getStringAttribute ("lang") != "pt";
         }
     }
@@ -76,6 +83,8 @@ public:
     vlv::CamLink link;
     std::atomic<float> level { 0.0f };
     std::atomic<bool> english { true };
+    vlv::License license;
+    std::atomic<bool> wantEnabled { true };
 };
 
 class CamLinkEditor : public juce::AudioProcessorEditor, private juce::Timer
@@ -83,10 +92,33 @@ class CamLinkEditor : public juce::AudioProcessorEditor, private juce::Timer
 public:
     explicit CamLinkEditor (CamLinkProcessor& p) : AudioProcessorEditor (p), proc (p)
     {
-        setSize (420, 230);
+        setSize (420, 300);
+        for (auto* e : { &emailEd, &keyEd })
+        {
+            e->setColour (juce::TextEditor::backgroundColourId, panel);
+            e->setColour (juce::TextEditor::textColourId, txt);
+            e->setColour (juce::TextEditor::outlineColourId, line);
+            e->setColour (juce::TextEditor::focusedOutlineColourId, accent);
+            e->setColour (juce::CaretComponent::caretColourId, accent);
+            e->setIndents (10, 7);
+            addChildComponent (*e);
+        }
+        emailEd.setFont (juce::Font (juce::FontOptions (15.0f)));
+        keyEd.setMultiLine (true, true);
+        keyEd.setReturnKeyStartsNewLine (false);
+        keyEd.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain)));
+        for (auto* b : { &pasteBtn, &activateBtn })
+        {
+            b->setColour (juce::TextButton::buttonColourId, b == &activateBtn ? accent : line);
+            b->setColour (juce::TextButton::textColourOffId, b == &activateBtn ? bg : txt);
+            addChildComponent (*b);
+        }
+        pasteBtn.onClick = [this] { keyEd.setText (juce::SystemClipboard::getTextFromClipboard().trim(), false); };
+        activateBtn.onClick = [this] { tryActivate(); };
+        emailEd.onReturnKey = keyEd.onReturnKey = [this] { tryActivate(); };
         power.setClickingTogglesState (true);
-        power.setToggleState (proc.link.isEnabled(), juce::dontSendNotification);
-        power.onClick = [this] { proc.link.setEnabled (power.getToggleState()); repaint(); };
+        power.setToggleState (proc.wantEnabled.load(), juce::dontSendNotification);
+        power.onClick = [this] { proc.applyEnable (power.getToggleState()); repaint(); };
         power.setColour (juce::TextButton::buttonColourId, line);
         power.setColour (juce::TextButton::buttonOnColourId, accent);
         power.setColour (juce::TextButton::textColourOffId, txt);
@@ -96,14 +128,76 @@ public:
         langBtn.setColour (juce::TextButton::textColourOffId, dim);
         langBtn.onClick = [this] { proc.english = ! proc.english.load(); timerCallback(); };
         addAndMakeVisible (langBtn);
+        lastEnglish = proc.english.load(); lastLocked = locked();
+        updateMode();
         startTimerHz (15);
         timerCallback();
+    }
+
+    bool locked() const { return ! proc.license.isActive(); }
+
+    void paintActivation (juce::Graphics& g, juce::Rectangle<int> r)
+    {
+        g.setColour (accent);
+        g.setFont (juce::Font (juce::FontOptions (14.0f, juce::Font::bold)));
+        g.drawText (t ("PRODUCT ACTIVATION", "ATIVAÇÃO DO PRODUTO"), r.removeFromTop (20), juce::Justification::centredLeft);
+        g.setColour (dim);
+        g.setFont (juce::Font (juce::FontOptions (13.0f)));
+        g.drawFittedText (t ("Enter the e-mail you used to buy and the license key you received.",
+                             "Digite o e-mail da compra e a chave de licença que você recebeu."),
+                          r.removeFromTop (34), juce::Justification::topLeft, 2);
+        g.setColour (activationOk ? ok : juce::Colour (0xffe2523a));
+        g.setFont (juce::Font (juce::FontOptions (13.0f)));
+        g.drawFittedText (status, getLocalBounds().reduced (16).removeFromBottom (22), juce::Justification::centredLeft, 1);
+    }
+
+    void tryActivate()
+    {
+        if (proc.license.activate (emailEd.getText(), keyEd.getText()))
+        {
+            activationOk = true; status = t ("Activated! Enjoy Valved Cam Link.", "Ativado! Bom uso do Valved Cam Link.");
+            proc.applyEnable (proc.wantEnabled.load());
+            updateMode();
+        }
+        else
+        {
+            activationOk = false;
+            status = t ("This key doesn't match this e-mail. Check both against the purchase e-mail.",
+                        "Essa chave não confere com esse e-mail. Confira os dois no e-mail da compra.");
+        }
+        repaint();
+    }
+
+    void updateMode()
+    {
+        const bool lk = locked();
+        for (juce::Component* c : { (juce::Component*) &emailEd, (juce::Component*) &keyEd, (juce::Component*) &pasteBtn, (juce::Component*) &activateBtn })
+            c->setVisible (lk);
+        power.setVisible (! lk);
+        emailEd.setTextToShowWhenEmpty (t ("Purchase e-mail", "E-mail da compra"), dim);
+        keyEd.setTextToShowWhenEmpty (t ("Paste your license key here", "Cole aqui a sua chave de licença"), dim);
+        pasteBtn.setButtonText (t ("PASTE KEY", "COLAR CHAVE"));
+        activateBtn.setButtonText (t ("ACTIVATE", "ATIVAR"));
+        resized();
     }
 
     void paint (juce::Graphics& g) override
     {
         g.fillAll (bg);
         auto r = getLocalBounds().reduced (16);
+        if (locked())
+        {
+            auto top0 = r.removeFromTop (34);
+            g.setColour (accent);
+            g.setFont (juce::Font (juce::FontOptions (22.0f, juce::Font::bold)));
+            g.drawText ("VALVED", top0.removeFromLeft (96), juce::Justification::centredLeft);
+            g.setColour (txt);
+            g.setFont (juce::Font (juce::FontOptions (22.0f)));
+            g.drawText ("CAM LINK", top0, juce::Justification::centredLeft);
+            r.removeFromTop (6);
+            paintActivation (g, r);
+            return;
+        }
 
         // título
         auto top = r.removeFromTop (34);
@@ -161,16 +255,33 @@ public:
 
     void resized() override
     {
+        langBtn.setBounds (getWidth() - 16 - 64, 20, 64, 24);
+        if (locked())
+        {
+            auto a = getLocalBounds().reduced (16);
+            a.removeFromTop (34 + 6 + 20 + 34);
+            emailEd.setBounds (a.removeFromTop (32));
+            a.removeFromTop (8);
+            keyEd.setBounds (a.removeFromTop (64));
+            a.removeFromTop (8);
+            auto row = a.removeFromTop (34);
+            pasteBtn.setBounds (row.removeFromLeft (130));
+            row.removeFromLeft (10);
+            activateBtn.setBounds (row);
+            return;
+        }
         auto r = getLocalBounds().reduced (16);
         r.removeFromTop (34 + 8 + 92 + 10);
         power.setBounds (r.removeFromTop (40).removeFromLeft (120));
-        langBtn.setBounds (getWidth() - 16 - 64, 20, 64, 24);
     }
 
 private:
     void timerCallback() override
     {
-        power.setButtonText (proc.link.isEnabled() ? t ("ON", "LIGADO") : t ("OFF", "DESLIGADO"));
+        power.setButtonText (proc.wantEnabled.load() ? t ("ON", "LIGADO") : t ("OFF", "DESLIGADO"));
+        const bool en = proc.english.load();
+        if (en != lastEnglish || locked() != lastLocked) { lastEnglish = en; lastLocked = locked(); updateMode(); }
+        if (locked() && ++reloadTick % 30 == 0 && proc.license.reload()) { proc.applyEnable (proc.wantEnabled.load()); updateMode(); }   // ativado em outra instância
         langBtn.setButtonText (proc.english.load() ? "EN | pt" : "en | PT");
         repaint();
     }
@@ -181,7 +292,11 @@ private:
     }
 
     CamLinkProcessor& proc;
-    juce::TextButton power, langBtn;
+    juce::TextButton power, langBtn, pasteBtn, activateBtn;
+    juce::TextEditor emailEd, keyEd;
+    juce::String status;
+    bool activationOk = false, lastEnglish = true, lastLocked = false;
+    int reloadTick = 0;
 };
 
 juce::AudioProcessorEditor* CamLinkProcessor::createEditor() { return new CamLinkEditor (*this); }

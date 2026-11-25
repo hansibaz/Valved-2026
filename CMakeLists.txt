@@ -242,6 +242,7 @@ if (MSVC)
     target_compile_options(ValvedCamLink PRIVATE /utf-8)
 endif()
 target_compile_definitions(ValvedCamLink PUBLIC
+    VLV_LICENSE_PREFIX="VALVEDCAM1|" VLV_LICENSE_FOLDER="Valved Cam Link"
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_DISPLAY_SPLASH_SCREEN=0)
 if(UNIX AND NOT APPLE)
     target_compile_definitions(ValvedCamLink PUBLIC
@@ -249,5 +250,5 @@ if(UNIX AND NOT APPLE)
         JUCE_USE_XCURSOR=0 JUCE_USE_XSHM=0 JUCE_USE_XRENDER=0)
 endif()
 target_link_libraries(ValvedCamLink
-    PRIVATE juce::juce_audio_utils
+    PRIVATE juce::juce_audio_utils juce::juce_cryptography
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags juce::juce_recommended_warning_flags)
