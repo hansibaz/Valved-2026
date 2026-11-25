@@ -1,0 +1,3 @@
+"NSCameraUsageDescription" = "Valved Cam uses the camera to record your video.";
+"NSPhotoLibraryAddUsageDescription" = "Valved Cam saves your videos to Photos.";
+"NSLocalNetworkUsageDescription" = "Valved Cam receives your plugin sound from your computer over the local network.";

@@ -138,6 +138,32 @@ jobs:
           name: ValvedCam
           path: ValvedCam.apk
 
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gerar o projeto Xcode (XcodeGen)
+        run: |
+          brew install xcodegen
+          cd ios/ValvedCam && xcodegen generate
+      - name: Compilar o app Valved Cam (iPhone, sem assinatura)
+        run: |
+          xcodebuild -project ios/ValvedCam/ValvedCam.xcodeproj -scheme ValvedCam -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build-ios \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build > ios.log 2>&1 \
+            || { grep -n "error:" ios.log | head -60; tail -30 ios.log; exit 1; }
+          grep -c "warning:" ios.log || true
+          test -d build-ios/Build/Products/Release-iphoneos/ValvedCam.app
+      - name: Empacotar (.ipa sem assinatura)
+        run: |
+          mkdir Payload && cp -R build-ios/Build/Products/Release-iphoneos/ValvedCam.app Payload/
+          zip -qry ValvedCam-iOS-sem-assinatura.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ValvedCam-iOS
+          path: ValvedCam-iOS-sem-assinatura.ipa
+
   release:
     needs: [windows, android]
     if: always() && needs.windows.result == 'success' && github.ref != 'refs/heads/main'

@@ -6,9 +6,14 @@
 // na rede Wi-Fi ou no cabo USB (ancoragem USB). O plugin escuta, conecta por TCP na porta anunciada
 // e envia: cabeçalho "VLVA" + taxa de amostragem (int32) + canais (int16 = 2) + bits (int16 = 16),
 // depois o áudio PCM 16 bits estéreo intercalado, sem parar, enquanto estiver conectado.
+//
+// iPhone: o iOS não deixa o app anunciar por UDP (broadcast). Então, quando nenhum anúncio chega,
+// o plugin procura sozinho: tenta a porta 47800 em todos os endereços da rede local (/24) e aceita
+// quem responder "VALVEDCAM|<nome>|<porta>\n" logo ao conectar (o app de iPhone faz isso).
 #include <juce_core/juce_core.h>
 #include <atomic>
 #include <vector>
+#include <thread>
 
 namespace vlv
 {
@@ -64,6 +69,7 @@ private:
     {
         juce::DatagramSocket udp (true);
         bool bound = false;
+        juce::int64 lastBeacon = (juce::int64) juce::Time::getMillisecondCounterHiRes(), lastScan = 0;
         std::vector<char> pcm;
 
         while (! threadShouldExit())
@@ -72,6 +78,7 @@ private:
             {
                 closeSocket();
                 status = Off;
+                lastBeacon = (juce::int64) juce::Time::getMillisecondCounterHiRes();   // ao ligar, espera 3 s pelo anúncio antes de procurar
                 wait (200);
                 continue;
             }
@@ -85,13 +92,32 @@ private:
             if (tcp == nullptr)
             {
                 status = Searching;
-                if (udp.waitUntilReady (true, 300) != 1) continue;
+                if (udp.waitUntilReady (true, 300) != 1)
+                {
+                    // nenhum anúncio (iPhone não anuncia): procura o app na rede
+                    const auto now = juce::Time::getMillisecondCounterHiRes();
+                    if (now - (double) lastBeacon > 3000.0 && now - (double) lastScan > 3000.0)
+                    {
+                        juce::String name;
+                        auto s = scanForApp (name);
+                        lastScan = (juce::int64) juce::Time::getMillisecondCounterHiRes();
+                        if (s != nullptr && enabled.load() && sendHeader (*s))
+                        {
+                            { const juce::ScopedLock sl (nameLock); deviceName = name; }
+                            fifo.reset();
+                            tcp = std::move (s);
+                            status = Connected;
+                        }
+                    }
+                    continue;
+                }
                 char msg[256] = {};
                 juce::String fromIp; int fromPort = 0;
                 const int got = udp.read (msg, (int) sizeof (msg) - 1, false, fromIp, fromPort);
                 if (got <= 0) continue;
                 auto parts = juce::StringArray::fromTokens (juce::String::fromUTF8 (msg, got), "|", "");
                 if (parts.size() < 3 || parts[0] != "VALVEDCAM") continue;
+                lastBeacon = (juce::int64) juce::Time::getMillisecondCounterHiRes();
                 const int port = parts[2].getIntValue();
                 if (port <= 0 || fromIp.isEmpty()) continue;
 
@@ -129,6 +155,58 @@ private:
             if (! writeAll (pcm.data(), w)) closeSocket();
         }
         closeSocket();
+    }
+
+    // Procura o app na rede local: tenta a porta 47800 em todos os vizinhos (/24) ao mesmo tempo
+    // e fica com o primeiro que se apresentar como Valved Cam.
+    std::unique_ptr<juce::StreamingSocket> scanForApp (juce::String& nameOut)
+    {
+        juce::StringArray hosts;
+        for (auto& a : juce::IPAddress::getAllAddresses (false))
+        {
+            const int b0 = a.address[0], b1 = a.address[1], b2 = a.address[2], b3 = a.address[3];
+            const bool priv = b0 == 10 || (b0 == 172 && b1 >= 16 && b1 <= 31) || (b0 == 192 && b1 == 168);
+            if (! priv) continue;   // só redes locais
+            for (int h = 1; h < 255; ++h)
+                if (h != b3) hosts.addIfNotAlreadyThere (juce::String (b0) + "." + juce::String (b1) + "." + juce::String (b2) + "." + juce::String (h));
+        }
+       #ifdef VLV_CAMLINK_TEST_SCAN
+        hosts.add ("127.0.0.1");   // só no teste automático
+       #endif
+        if (hosts.isEmpty()) return nullptr;
+
+        juce::CriticalSection foundLock;
+        std::unique_ptr<juce::StreamingSocket> found;
+        juce::String foundName;
+        std::atomic<int> next { 0 };
+        auto worker = [&]
+        {
+            for (;;)
+            {
+                const int i = next++;
+                if (i >= hosts.size() || threadShouldExit()) return;
+                { const juce::ScopedLock sl (foundLock); if (found != nullptr) return; }
+                auto s = std::make_unique<juce::StreamingSocket>();
+                if (! s->connect (hosts[i], 47800, 400)) continue;
+                char hello[128] = {};
+                int got = 0;
+                while (got < (int) sizeof (hello) - 1 && s->waitUntilReady (true, 800) == 1)
+                {
+                    const int k = s->read (hello + got, 1, false);
+                    if (k <= 0 || hello[got] == '\n') break;
+                    ++got;
+                }
+                auto parts = juce::StringArray::fromTokens (juce::String::fromUTF8 (hello, got), "|", "");
+                if (parts.size() < 2 || parts[0] != "VALVEDCAM") continue;
+                const juce::ScopedLock sl (foundLock);
+                if (found == nullptr) { found = std::move (s); foundName = parts[1]; }
+            }
+        };
+        std::vector<std::unique_ptr<std::thread>> pool;
+        for (int t = 0; t < 32; ++t) pool.push_back (std::make_unique<std::thread> (worker));
+        for (auto& t : pool) t->join();
+        nameOut = foundName;
+        return std::move (found);
     }
 
     bool sendHeader (juce::StreamingSocket& s)

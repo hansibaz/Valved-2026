@@ -1,0 +1,40 @@
+name: ValvedCam
+options:
+  bundleIdPrefix: com.valved
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: en
+targets:
+  ValvedCam:
+    type: application
+    platform: iOS
+    sources:
+      - path: ValvedCam
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.valved.cam
+        PRODUCT_NAME: ValvedCam
+        MARKETING_VERSION: "0.3"
+        CURRENT_PROJECT_VERSION: "3"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: ValvedCam/Info.plist
+      properties:
+        CFBundleDisplayName: Valved Cam
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UIStatusBarHidden: true
+        UIViewControllerBasedStatusBarAppearance: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        ITSAppUsesNonExemptEncryption: false
+        NSCameraUsageDescription: Valved Cam uses the camera to record your video.
+        NSPhotoLibraryAddUsageDescription: Valved Cam saves your videos to Photos.
+        NSLocalNetworkUsageDescription: Valved Cam receives your plugin sound from your computer over the local network.
+        NSBonjourServices: [_valvedcam._tcp]
+        CFBundleLocalizations: [en, pt-BR]
