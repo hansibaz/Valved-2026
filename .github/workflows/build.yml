@@ -181,7 +181,7 @@ jobs:
           path: ValvedCam-iOS-sem-assinatura.ipa
 
   release:
-    needs: [windows, android]
+    needs: [windows, android, macos]
     if: always() && needs.windows.result == 'success' && github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -196,6 +196,6 @@ jobs:
           ls -la art
           tag="build-${{ github.ref_name }}"
           gh release delete "$tag" --yes --cleanup-tag -R ${{ github.repository }} 2>/dev/null || true
-          files=$(ls art/*.zip art/*.apk 2>/dev/null)
+          files=$(ls art/*.zip art/*.apk 2>/dev/null | grep -v -- '-teste.zip')
           gh release create "$tag" $files -R ${{ github.repository }} --target ${{ github.sha }} --prerelease \
-            --title "Valved ${{ github.ref_name }} (teste)" --notes "Build automatico do ramo ${{ github.ref_name }} (Windows e app Valved Cam para Android)"
+            --title "Valved ${{ github.ref_name }} (teste)" --notes "Build automatico do ramo ${{ github.ref_name }} (Windows, Mac e app Valved Cam para Android)"
