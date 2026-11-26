@@ -50,8 +50,8 @@ jobs:
             ValvedCamLink-Windows.zip
 
   macos:
-    if: false   # Mac fora por enquanto (só Windows + Android)
-    runs-on: macos-latest
+    runs-on: macos-15-intel   # Intel: a fila dos Macs arm64 do GitHub está lotada (o plugin sai Universal mesmo assim)
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -63,26 +63,24 @@ jobs:
           -DVLV_BUILD_RENDER=ON
 
       - name: Compilar (AU, VST3, Standalone e ferramenta de teste)
-        run: cmake --build build --config Release --parallel 4 --target Valved_AU Valved_VST3 Valved_Standalone ValvedRender
+        run: cmake --build build --config Release --parallel 4 --target Valved_AU Valved_VST3 Valved_Standalone ValvedCamLink_AU ValvedCamLink_VST3 ValvedRender
 
       - name: Assinar (ad-hoc)
         run: |
           A=build/Valved_artefacts/Release
           ls -R $A | head -40
-          for b in "$A/AU/Valved.component" "$A/VST3/Valved.vst3" "$A/Standalone/Valved.app"; do
+          L=build/ValvedCamLink_artefacts/Release
+          for b in "$A/AU/Valved.component" "$A/VST3/Valved.vst3" "$A/Standalone/Valved.app" "$L/AU/Valved Cam Link.component" "$L/VST3/Valved Cam Link.vst3"; do
             codesign --force --deep --sign - "$b"
             lipo -info "$(find "$b/Contents/MacOS" -type f | head -1)"
           done
 
-      - name: Testar o som (gravação de guitarra pelos 15 presets, Apple Silicon e Intel)
+      - name: Testar o som (gravação de guitarra por todos os presets)
         run: |
           gunzip -c Tests/audio/guitar_di_48k.f32.gz > di.f32
           R=$(find build -name ValvedRender -type f -perm -u+x | head -1)
-          echo "== Apple Silicon =="
-          "$R" di.f32 renders_arm64
-          echo "== Intel (Rosetta) =="
-          arch -x86_64 "$R" di.f32 renders_x86_64 || echo "Rosetta indisponível no runner"
-          ditto -c -k --keepParent renders_arm64 Valved-macOS-teste.zip
+          "$R" di.f32 renders_mac
+          ditto -c -k --keepParent renders_mac Valved-macOS-teste.zip
 
       - name: Validar o Audio Unit (auval)
         run: |
@@ -91,7 +89,11 @@ jobs:
           killall -9 AudioComponentRegistrar 2>/dev/null || true
           sleep 3
           auval -a | grep -i valved || true
-          auval -strict -v aufx Vld1 Rbzb | tail -40
+          auval -strict -v aufx Vld1 Rbzb | tail -25
+          cp -R "build/ValvedCamLink_artefacts/Release/AU/Valved Cam Link.component" ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          sleep 3
+          auval -strict -v aufx Vclk Rbzb | tail -15
 
       - name: Empacotar
         run: |
@@ -109,13 +111,27 @@ jobs:
             echo "Se o macOS disser que o arquivo nao pode ser aberto, abra o Terminal e rode:"
             echo "xattr -dr com.apple.quarantine /Library/Audio/Plug-Ins/Components/Valved.component /Library/Audio/Plug-Ins/VST3/Valved.vst3 /Applications/Valved.app"
           } > dist/LEIA-ME.txt
-          cd dist && ditto -c -k --sequesterRsrc . ../Valved-macOS.zip
+          cd dist && ditto -c -k --sequesterRsrc . ../Valved-macOS.zip && cd ..
+          L=build/ValvedCamLink_artefacts/Release
+          mkdir -p distlink
+          cp -R "$L/AU/Valved Cam Link.component" "$L/VST3/Valved Cam Link.vst3" distlink/
+          {
+            echo "VALVED CAM LINK for macOS (Apple Silicon and Intel)"
+            echo ""
+            echo "1) Valved Cam Link.component -> /Library/Audio/Plug-Ins/Components   (Logic, GarageBand...)"
+            echo "2) Valved Cam Link.vst3      -> /Library/Audio/Plug-Ins/VST3         (Reaper, Cubase, Studio One, Ableton...)"
+            echo ""
+            echo "If macOS says the file can't be opened, open Terminal and run:"
+            echo "xattr -dr com.apple.quarantine \"/Library/Audio/Plug-Ins/Components/Valved Cam Link.component\" \"/Library/Audio/Plug-Ins/VST3/Valved Cam Link.vst3\""
+          } > distlink/README.txt
+          cd distlink && ditto -c -k --sequesterRsrc . ../ValvedCamLink-macOS.zip
 
       - uses: actions/upload-artifact@v4
         with:
           name: Valved-macOS
           path: |
             Valved-macOS.zip
+            ValvedCamLink-macOS.zip
             Valved-macOS-teste.zip
 
   android:

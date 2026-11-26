@@ -43,7 +43,10 @@ juce_add_plugin(Valved
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     COPY_PLUGIN_AFTER_BUILD FALSE
     VST3_CATEGORIES Fx Distortion
-    AU_MAIN_TYPE kAudioUnitType_Effect)
+    AU_MAIN_TYPE kAudioUnitType_Effect
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "O Valved precisa da entrada de audio para receber o som da sua guitarra."
+    PLIST_TO_MERGE "<plist><dict><key>NSLocalNetworkUsageDescription</key><string>O Valved usa a rede local para mandar o som para o app Valved Cam no celular.</string></dict></plist>")
 
 juce_add_binary_data(ValvedAssets SOURCES
     Resources/Fonts/BarlowCondensed-Medium.ttf
