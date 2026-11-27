@@ -34,7 +34,43 @@ final class AudioLink {
 
     init(deviceName: String) { self.deviceName = deviceName }
 
-    func start() { queue.async { if self.listener == nil { self.startListener() } } }
+    private var lastData = Date.distantPast
+    private var watchdog: DispatchSourceTimer?
+
+    func start() {
+        queue.async {
+            if self.listener == nil { self.startListener() }
+            if self.watchdog == nil {
+                // se o som parar de chegar por 3 s, a conexão morreu: libera para o plugin conectar de novo
+                let t = DispatchSource.makeTimerSource(queue: self.queue)
+                t.schedule(deadline: .now() + 1, repeating: 1)
+                t.setEventHandler { [weak self] in
+                    guard let self = self, self.conn != nil, self.isConnected,
+                          Date().timeIntervalSince(self.lastData) > 3 else { return }
+                    self.conn?.cancel(); self.conn = nil; self.setConnected(false)
+                }
+                t.resume()
+                self.watchdog = t
+            }
+        }
+    }
+
+    /// App foi para o fundo: fecha tudo (o iOS mataria as conexões de qualquer jeito).
+    func stop() {
+        queue.async {
+            self.conn?.cancel(); self.conn = nil; self.setConnected(false)
+            self.listener?.cancel(); self.listener = nil
+        }
+    }
+
+    /// App voltou para a tela: abre a porta de novo do zero.
+    func restart() {
+        queue.async {
+            self.conn?.cancel(); self.conn = nil; self.setConnected(false)
+            self.listener?.cancel(); self.listener = nil
+            self.startListener()
+        }
+    }
 
     private func startListener() {
         listener?.cancel()
@@ -49,7 +85,9 @@ final class AudioLink {
         l.service = NWListener.Service(name: "Valved Cam", type: "_valvedcam._tcp")
         l.newConnectionHandler = { [weak self] c in self?.accept(c) }
         l.stateUpdateHandler = { [weak self] st in
-            if case .failed = st { self?.queue.asyncAfter(deadline: .now() + 2) { self?.startListener() } }
+            if case .failed = st {
+                self?.queue.asyncAfter(deadline: .now() + 1) { if self?.listener != nil { self?.startListener() } }
+            }
         }
         listener = l
         l.start(queue: queue)
@@ -60,7 +98,8 @@ final class AudioLink {
     }
 
     private func accept(_ c: NWConnection) {
-        if conn != nil && isConnected { c.cancel(); return }   // já tem um plugin mandando som
+        // já tem um plugin mandando som agora: recusa. Se a conexão antiga estiver parada, troca pela nova.
+        if conn != nil && isConnected && Date().timeIntervalSince(lastData) < 2 { c.cancel(); return }
         conn?.cancel()
         conn = c
         remainder.removeAll()
@@ -86,6 +125,7 @@ final class AudioLink {
             self._sampleRate = sr > 0 ? sr : 48000
             self._channels = max(1, ch)
             self.lock.unlock()
+            self.lastData = Date()
             self.setConnected(true)
             self.receiveLoop(c)
         }
@@ -101,6 +141,7 @@ final class AudioLink {
     }
 
     private func handle(_ d: Data) {
+        lastData = Date()
         let now = CMClockGetTime(CMClockGetHostTimeClock())
         let ch = channels, sr = sampleRate
         var buf = remainder

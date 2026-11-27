@@ -94,8 +94,15 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         }
     }
 
+    /// Voltou do fundo: liga a câmera e reabre a conexão com o plugin.
+    func resume() {
+        start()
+        link.restart()
+    }
+
     func pause() {
         if recording { stopRecord() }
+        link.stop()
         sessionQ.async { if self.session.isRunning { self.session.stopRunning() } }
     }
 

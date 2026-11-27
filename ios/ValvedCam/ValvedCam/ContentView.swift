@@ -13,6 +13,7 @@ struct ContentView: View {
     @StateObject private var cam = CameraModel()
     @Environment(\.scenePhase) private var phase
     @State private var showSync = false
+    @State private var wasInBackground = false
 
     var body: some View {
         ZStack {
@@ -42,7 +43,8 @@ struct ContentView: View {
         .statusBarHidden()
         .onAppear { cam.start() }
         .onChange(of: phase) { p in
-            if p == .active { cam.start() } else if p == .background { cam.pause() }
+            if p == .active { if wasInBackground { cam.resume() } else { cam.start() }; wasInBackground = false }
+            else if p == .background { wasInBackground = true; cam.pause() }
         }
     }
 

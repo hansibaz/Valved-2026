@@ -78,7 +78,7 @@ private:
             {
                 closeSocket();
                 status = Off;
-                lastBeacon = (juce::int64) juce::Time::getMillisecondCounterHiRes();   // ao ligar, espera 3 s pelo anúncio antes de procurar
+                lastBeacon = (juce::int64) juce::Time::getMillisecondCounterHiRes();   // ao ligar, espera 1,5 s pelo anúncio (Android) antes de procurar (iPhone)
                 wait (200);
                 continue;
             }
@@ -96,7 +96,7 @@ private:
                 {
                     // nenhum anúncio (iPhone não anuncia): procura o app na rede
                     const auto now = juce::Time::getMillisecondCounterHiRes();
-                    if (now - (double) lastBeacon > 3000.0 && now - (double) lastScan > 3000.0)
+                    if (now - (double) lastBeacon > 1500.0 && now - (double) lastScan > 1500.0)
                     {
                         juce::String name;
                         auto s = scanForApp (name);
@@ -174,10 +174,15 @@ private:
         hosts.add ("127.0.0.1");   // só no teste automático
        #endif
         if (hosts.isEmpty()) return nullptr;
+        // o último iPhone encontrado vai primeiro (reconecta na hora)
+        {
+            const juce::ScopedLock sl (nameLock);
+            if (lastAppIp.isNotEmpty()) { hosts.removeString (lastAppIp); hosts.insert (0, lastAppIp); }
+        }
 
         juce::CriticalSection foundLock;
         std::unique_ptr<juce::StreamingSocket> found;
-        juce::String foundName;
+        juce::String foundName, foundIp;
         std::atomic<int> next { 0 };
         auto worker = [&]
         {
@@ -187,7 +192,7 @@ private:
                 if (i >= hosts.size() || threadShouldExit()) return;
                 { const juce::ScopedLock sl (foundLock); if (found != nullptr) return; }
                 auto s = std::make_unique<juce::StreamingSocket>();
-                if (! s->connect (hosts[i], 47800, 400)) continue;
+                if (! s->connect (hosts[i], 47800, i == 0 ? 600 : 300)) continue;
                 char hello[128] = {};
                 int got = 0;
                 while (got < (int) sizeof (hello) - 1 && s->waitUntilReady (true, 800) == 1)
@@ -199,13 +204,14 @@ private:
                 auto parts = juce::StringArray::fromTokens (juce::String::fromUTF8 (hello, got), "|", "");
                 if (parts.size() < 2 || parts[0] != "VALVEDCAM") continue;
                 const juce::ScopedLock sl (foundLock);
-                if (found == nullptr) { found = std::move (s); foundName = parts[1]; }
+                if (found == nullptr) { found = std::move (s); foundName = parts[1]; foundIp = hosts[i]; }
             }
         };
         std::vector<std::unique_ptr<std::thread>> pool;
-        for (int t = 0; t < 32; ++t) pool.push_back (std::make_unique<std::thread> (worker));
+        for (int t = 0; t < 64; ++t) pool.push_back (std::make_unique<std::thread> (worker));
         for (auto& t : pool) t->join();
         nameOut = foundName;
+        if (foundIp.isNotEmpty()) { const juce::ScopedLock sl (nameLock); lastAppIp = foundIp; }
         return std::move (found);
     }
 
@@ -246,7 +252,7 @@ private:
     std::vector<float> bufL, bufR;
     std::unique_ptr<juce::StreamingSocket> tcp;
     juce::CriticalSection nameLock;
-    juce::String deviceName;
+    juce::String deviceName, lastAppIp;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CamLink)
 };
