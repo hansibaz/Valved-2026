@@ -125,10 +125,13 @@ struct ContentView: View {
 
     private var syncRow: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(tr("Audio sync: ", "Sincronia do som: ") + "\(cam.syncMs) ms")
+            Text(tr("Audio sync: ", "Sincronia do som: ") + (cam.syncMs > 0 ? "+" : "") + "\(cam.syncMs) ms")
                 .font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
-            Slider(value: Binding(get: { Double(cam.syncMs) }, set: { cam.setSync(Int($0 / 5) * 5) }), in: 0...400)
+            Slider(value: Binding(get: { Double(cam.syncMs) }, set: { cam.setSync(Int(($0 / 5).rounded()) * 5) }), in: -300...300)
                 .tint(orange)
+            Text(tr("If the image is late, slide to the left. If the sound is late, slide to the right.",
+                    "Se a imagem atrasar, arraste para a esquerda. Se o som atrasar, arraste para a direita."))
+                .font(.system(size: 10)).foregroundColor(.white.opacity(0.7))
         }
         .padding(.horizontal, 14).padding(.vertical, 6)
         .background(.black.opacity(0.55)).clipShape(RoundedRectangle(cornerRadius: 14))

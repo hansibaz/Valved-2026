@@ -54,7 +54,8 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         fps = prefs.object(forKey: "fps") as? Int ?? 30
         stab = prefs.object(forKey: "stab") as? Bool ?? true
         grid = prefs.bool(forKey: "grid")
-        syncMs = prefs.object(forKey: "sync") as? Int ?? 120
+        // "sync2": no iPhone a imagem já sai com a hora certa, então o padrão é bem menor que no Android
+        syncMs = prefs.object(forKey: "sync2") as? Int ?? 0
         link = AudioLink(deviceName: UIDevice.current.name)
         super.init()
         link.onAudio = { [weak self] pcm, sr, ch, t in
@@ -65,7 +66,7 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
 
     private func save() {
         prefs.set(front, forKey: "front"); prefs.set(res, forKey: "res"); prefs.set(fps, forKey: "fps")
-        prefs.set(stab, forKey: "stab"); prefs.set(grid, forKey: "grid"); prefs.set(syncMs, forKey: "sync")
+        prefs.set(stab, forKey: "stab"); prefs.set(grid, forKey: "grid"); prefs.set(syncMs, forKey: "sync2")
     }
 
     func toast(_ s: String) {
