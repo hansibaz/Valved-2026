@@ -1,5 +1,5 @@
 #pragma once
-// Barra BACKING TRACK (embaixo do plugin): carregar uma base, tocar/pausar/parar, repetir,
+// Barra JAM SESSION (embaixo do plugin): carregar uma base, tocar/pausar/parar, repetir,
 // forma de onda com o ponto de reprodução (clique para pular), volume da base e
 // "NO VÍDEO" (a base vai junto para o app Valved Cam).
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -74,8 +74,8 @@ public:
     {
         auto r = getLocalBounds().reduced (24, 0);
         auto left = r.removeFromLeft (214);
-        titleArea = left.withHeight (16).withY (16);
-        nameArea = left.withHeight (22).withY (34);
+        titleArea = left.withHeight (22).withY (11);
+        nameArea = left.withHeight (22).withY (35);
         openBtn.setBounds (left.getX(), 66, 92, 28);
         clearBtn.setBounds (left.getX() + 98, 66, 28, 28);
 
@@ -108,8 +108,8 @@ public:
 
         // título e nome do arquivo
         g.setColour (ui::accent);
-        g.setFont (ui::Fonts::condensedBold (14.0f));
-        g.drawText ("BACKING TRACK", titleArea, juce::Justification::centredLeft);
+        g.setFont (ui::Fonts::condensedBold (19.0f));
+        g.drawText ("JAM SESSION", titleArea, juce::Justification::centredLeft);
         g.setColour (bt.hasFile() ? ui::text : ui::textDim);
         g.setFont (ui::Fonts::condensed (bt.hasFile() ? 17.0f : 15.0f));
         const auto name = bt.hasFile() ? bt.getFile().getFileNameWithoutExtension() : lang::t ("No backing track loaded", "Nenhuma base carregada");
