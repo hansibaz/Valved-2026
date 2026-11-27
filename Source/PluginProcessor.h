@@ -16,6 +16,7 @@
 #include "dsp/GraphicEq.h"
 #include "License.h"
 #include "CamLink.h"
+#include "BackingTrack.h"
 
 namespace ParamID
 {
@@ -99,6 +100,7 @@ class ValvedProcessor : public juce::AudioProcessor, private juce::Timer
 {
 public:
     vlv::CamLink camLink;   // Valved Cam: manda o som para o app do celular
+    vlv::BackingTrack backing;   // base para tocar junto (sai no fone e vai junto para o Valved Cam)
     vlv::License license;   // ativação (sem licença válida: saída muda e tela de ativação)
     ValvedProcessor();
     ~ValvedProcessor() override;

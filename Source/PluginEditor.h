@@ -10,6 +10,7 @@
 #include "ui/TunerView.h"
 #include "ui/PresetBar.h"
 #include "ui/ActivationView.h"
+#include "ui/BackingBar.h"
 
 // Knob moderno da barra superior (nome em cima, valor embaixo)
 class TopKnob : public juce::Component
@@ -89,9 +90,11 @@ private:
     PedalsPage pedalsPage;
     FxPage fxPage;
     TunerView tunerView;
+    BackingBar backingBar;   // base para tocar junto (embaixo)
     int page = PageAmp;
 
     juce::Rectangle<int> topBar, logoArea, mainArea;
+    static constexpr int backingH = 100;
     std::unique_ptr<ActivationView> activation;   // tela de ativação (só aparece sem licença)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ValvedEditor)

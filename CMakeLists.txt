@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Valved VERSION 0.53.0)
+project(Valved VERSION 0.54.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -150,6 +150,7 @@ if (MSVC)
 endif()
 
 target_compile_definitions(Valved PUBLIC
+    JUCE_USE_MP3AUDIOFORMAT=1
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0

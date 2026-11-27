@@ -255,6 +255,7 @@ void ValvedProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     prepared = false;
     camLink.setSampleRate (sampleRate);
+    backing.prepare (sampleRate, samplesPerBlock);
     mono.setSize (1, juce::jmax (1, samplesPerBlock), false, true, false);
 
     gate.prepare (sampleRate);
@@ -550,6 +551,19 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
             L[i] *= g;
             if (R != nullptr) R[i] *= g;
         }
+    // 12) Backing track: soma a base à guitarra (sai no fone e, se escolhido, vai junto para o Valved Cam)
+    const bool baseNoCam = backing.sendToCam.load();
+    if (! baseNoCam) camLink.push (L, R, n);   // só a guitarra vai para o celular
+    if (backing.isPlaying())
+    {
+        backing.addTo (L, R, n);
+        for (int i = 0; i < n; ++i)
+        {
+            L[i] = juce::jlimit (-1.0f, 1.0f, L[i]);
+            if (R != nullptr) R[i] = juce::jlimit (-1.0f, 1.0f, R[i]);
+        }
+    }
+    else backing.addTo (L, R, 0);
     outPeak = 0;
     for (int i = 0; i < n; ++i)
     {
@@ -557,8 +571,8 @@ void ValvedProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         if (R != nullptr) outPeak = juce::jmax (outPeak, std::abs (R[i]));
     }
     outputMeter = juce::jmax (outPeak, outputMeter.load() * 0.8f);
-    // 12) Valved Cam: o som final vai para o celular (só quando o app estiver conectado)
-    camLink.push (L, R, n);
+    // 13) Valved Cam: o som final (guitarra + base) vai para o celular (só quando o app estiver conectado)
+    if (baseNoCam) camLink.push (L, R, n);
 }
 
 void ValvedProcessor::getStateInformation (juce::MemoryBlock& destData)
@@ -572,6 +586,10 @@ void ValvedProcessor::getStateInformation (juce::MemoryBlock& destData)
     state.setProperty ("tunerMute", tunerMute.load(), nullptr);
     state.setProperty ("presetIndex", presetIndex, nullptr);
     state.setProperty ("presetName", presetName, nullptr);
+    state.setProperty ("btFile", backing.getFile().getFullPathName(), nullptr);
+    state.setProperty ("btVol", backing.volumeDb.load(), nullptr);
+    state.setProperty ("btLoop", backing.getLoop(), nullptr);
+    state.setProperty ("btCam", backing.sendToCam.load(), nullptr);
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
@@ -588,6 +606,13 @@ void ValvedProcessor::setStateInformation (const void* data, int sizeInBytes)
             tunerMute = (bool) tree.getProperty ("tunerMute", true);
             presetIndex = (int) tree.getProperty ("presetIndex", -1);
             presetName = tree.getProperty ("presetName", "").toString();
+            backing.volumeDb = juce::jlimit (-60.0f, 6.0f, (float) (double) tree.getProperty ("btVol", -6.0));
+            backing.setLoop ((bool) tree.getProperty ("btLoop", true));
+            backing.sendToCam = (bool) tree.getProperty ("btCam", true);
+            {
+                const juce::File bt (tree.getProperty ("btFile").toString());
+                if (bt.existsAsFile() && bt != backing.getFile()) backing.load (bt);
+            }
             apvts.replaceState (tree);
             {
                 const juce::ScopedLock sl (irLock);

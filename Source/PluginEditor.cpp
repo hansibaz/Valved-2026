@@ -126,7 +126,7 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
       output (p.apvts, ParamID::output, "OUTPUT"),
       presetBar (p),
       head (p.apvts),
-      cabPage (p), pedalsPage (p), fxPage (p), tunerView (p)
+      cabPage (p), pedalsPage (p), fxPage (p), tunerView (p), backingBar (p)
 {
     setLookAndFeel (&look);
 
@@ -148,6 +148,7 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
     tuningLabel.setJustificationType (juce::Justification::centredLeft);
     addChildComponent (tuningLabel);   // (texto da afinação removido do cabeçalho: o próprio knob TRANSPOSE já mostra os semitons)
     addAndMakeVisible (presetBar);
+    addAndMakeVisible (backingBar);
 
     for (auto* f : { &flagEn, &flagPt })
     {
@@ -276,7 +277,7 @@ ValvedEditor::ValvedEditor (ValvedProcessor& p)
         addAndMakeVisible (*activation);
     }
 
-    setSize (1100, 720);
+    setSize (1100, 720 + backingH);
     showPage (PageAmp);
     startTimerHz (30);
     refreshLanguage();
@@ -361,6 +362,7 @@ void ValvedEditor::FlagButton::paintButton (juce::Graphics& g, bool highlighted,
 
 void ValvedEditor::refreshLanguage()
 {
+    backingBar.refreshLanguage();
     audioBtn.setTooltip (lang::t ("Audio settings: interface, input/output and buffer", "Configurações de áudio: interface, entrada/saída e buffer"));
     lastCamStatus = -1;
     input.label.setText (lang::t ("INPUT", "ENTRADA"), juce::dontSendNotification);
@@ -462,7 +464,7 @@ void ValvedEditor::paint (juce::Graphics& g)
 
     g.setColour (textDim);
     g.setFont (Fonts::condensed (14.0f));
-    g.drawText ("v0.53", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
+    g.drawText ("v0.54", getLocalBounds().removeFromTop (58).reduced (24, 0), juce::Justification::centredRight);
     g.setFont (Fonts::condensedBold (12.0f));
     g.drawFittedText (lang::t ("QUALITY", "QUALIDADE"), qualityLabelArea, juce::Justification::centredRight, 1, 0.8f);
 
@@ -482,6 +484,7 @@ void ValvedEditor::resized()
     if (activation != nullptr) { activation->setBounds (getLocalBounds()); activation->toFront (false); }
     auto r = getLocalBounds();
     topBar = r.removeFromTop (170);
+    backingBar.setBounds (r.removeFromBottom (backingH));
     mainArea = r;
 
     auto row1 = juce::Rectangle<int> (0, 0, getWidth(), 58);
